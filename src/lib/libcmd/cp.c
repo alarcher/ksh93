@@ -1,14 +1,14 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1992-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1992-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
-*                  Common Public License, Version 1.0                  *
+*                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
 *                                                                      *
 *                A copy of the License is available at                 *
-*            http://www.opensource.org/licenses/cpl1.0.txt             *
-*         (with md5 checksum 059e8cd6165cb4c31e351f2b69388fd9)         *
+*          http://www.eclipse.org/org/documents/epl-v10.html           *
+*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
 *                                                                      *
 *              Information and Software Systems Research               *
 *                            AT&T Research                             *
@@ -27,7 +27,7 @@
  */
 
 static const char usage_head[] =
-"[-?@(#)$Id: cp (AT&T Research) 2010-10-20 $\n]"
+"[-?@(#)$Id: cp (AT&T Research) 2011-05-03 $\n]"
 USAGE_LICENSE
 ;
 
@@ -118,7 +118,7 @@ static const char usage_tail[] =
     "variable, or the default value \b~\b.]:[suffix]"
 "[b?\b--backup\b using the type in the \bVERSION_CONTROL\b environment "
     "variable.]"
-"[x|X|l:xdev|local|mount|one-file-system?Do not descend into directories "
+"[x|X:xdev|local|mount|one-file-system?Do not descend into directories "
     "in different filesystems than their parents.]"
 
 "\n"
@@ -605,29 +605,28 @@ visit(State_t* state, register FTSENT* ent)
 					error(ERROR_SYSTEM|2, "%s: %s read stream error", ent->fts_path, state->path);
 					close(rfd);
 					close(wfd);
+					return 0;
 				}
-				else
+				if (!(op = sfnew(NiL, NiL, SF_UNBOUND, wfd, SF_WRITE)))
 				{
-					n = 0;
-					if (!(op = sfnew(NiL, NiL, SF_UNBOUND, wfd, SF_WRITE)))
-					{
-						error(ERROR_SYSTEM|2, "%s: %s write stream error", ent->fts_path, state->path);
-						close(wfd);
-						sfclose(ip);
-					}
-					else
-					{
-						if (sfmove(ip, op, (Sfoff_t)SF_UNBOUND, -1) < 0)
-							n |= 3;
-						if (!sfeof(ip))
-							n |= 1;
-						if (sfsync(op) || state->sync && fsync(wfd) || sfclose(op))
-							n |= 2;
-						if (sfclose(ip))
-							n |= 1;
-						if (n)
-							error(ERROR_SYSTEM|2, "%s: %s %s error", ent->fts_path, state->path, n == 1 ? ERROR_translate(0, 0, 0, "read") : n == 2 ? ERROR_translate(0, 0, 0, "write") : ERROR_translate(0, 0, 0, "io"));
-					}
+					error(ERROR_SYSTEM|2, "%s: %s write stream error", ent->fts_path, state->path);
+					close(wfd);
+					sfclose(ip);
+					return 0;
+				}
+				n = 0;
+				if (sfmove(ip, op, (Sfoff_t)SF_UNBOUND, -1) < 0)
+					n |= 3;
+				if (!sfeof(ip))
+					n |= 1;
+				if (sfsync(op) || state->sync && fsync(wfd) || sfclose(op))
+					n |= 2;
+				if (sfclose(ip))
+					n |= 1;
+				if (n)
+				{
+					error(ERROR_SYSTEM|2, "%s: %s %s error", ent->fts_path, state->path, n == 1 ? ERROR_translate(0, 0, 0, "read") : n == 2 ? ERROR_translate(0, 0, 0, "write") : ERROR_translate(0, 0, 0, "io"));
+					return 0;
 				}
 			}
 			else

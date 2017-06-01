@@ -1,14 +1,14 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
-#                  Common Public License, Version 1.0                  #
+#                 Eclipse Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
 #                                                                      #
 #                A copy of the License is available at                 #
-#            http://www.opensource.org/licenses/cpl1.0.txt             #
-#         (with md5 checksum 059e8cd6165cb4c31e351f2b69388fd9)         #
+#          http://www.eclipse.org/org/documents/epl-v10.html           #
+#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
 #                                                                      #
 #              Information and Software Systems Research               #
 #                            AT&T Research                             #
@@ -345,8 +345,7 @@ TST=(
 	( CMD='cat $tmp/buf | read v; print $v'		LIM=4*1024	)
 )
 
-command exec 3<> /dev/null
-if	cat /dev/fd/3 >/dev/null 2>&1
+if	cat /dev/fd/3 3</dev/null >/dev/null 2>&1 || whence mkfifo > /dev/null
 then	T=${#TST[@]}
 	TST[T].CMD='$cat <(print foo)'
 	TST[T].EXP=3
@@ -503,5 +502,64 @@ got=$( $SHELL -c "(eval '$src'); echo $exp" )
 
 x=$( { time $SHELL -c date >| /dev/null;} 2>&1)
 [[ $x == *real*user*sys* ]] || err_exit 'time { ...;} 2>&1 in $(...) fails'
+
+x=$($SHELL -c '( function fx { export X=123;  } ; fx; ); echo $X')
+[[ $x == 123 ]] && err_exit 'global variables set from with functions inside a
+subshell can leave side effects in parent shell'
+
+date=$(whence -p date)
+err() { return $1; }
+( err 12 ) & pid=$!
+: $( $date)
+wait $pid
+[[ $? == 12 ]] || err_exit 'exit status from subshells not being preserved'
+
+if	cat /dev/fd/3 3</dev/null >/dev/null 2>&1 || whence mkfifo > /dev/null
+then	x="$(sed 's/^/Hello /' <(print "Fred" | sort))"
+	[[ $x == 'Hello Fred' ]] || err_exit  "process substitution of pipeline in command substitution not working"
+fi
+
+{
+$SHELL <<- \EOF
+	function foo
+	{
+		integer i
+		print -u2 foobar
+		for	((i=0; i < 8000; i++))
+		do	print abcdefghijk
+		done
+		print -u2 done
+	}
+	out=$(eval "foo | cat" 2>&1)
+	(( ${#out} == 96011 )) || err_exit "\${#out} is ${#out} should be 96011"
+EOF
+} & pid=$!
+$SHELL -c "{ sleep 2 && kill $pid ;}" 2> /dev/null
+(( $? == 0 )) &&  err_exit 'process has hung'
+
+{
+x=$( $SHELL  <<- \EOF
+	function func1 { typeset IFS; : $(func2); print END ;}
+	function func2 { IFS="BAR"; }
+	func1
+	func1
+EOF
+)
+} 2> /dev/null
+[[ $x == $'END\nEND' ]] || err_exit 'bug in save/restore of IFS in subshell'
+
+true=$(whence -p true)
+date=$(whence -p date)
+tmpf=$tmp/foo
+function fun1
+{
+	$true
+	cd - >/dev/null 2>&1
+	print -u2 -- "$($date) SUCCESS"
+}
+
+print -n $(fun1 2> $tmpf)
+[[  $(< $tmpf) == *SUCCESS ]] || err_exit 'standard error output lost with command substitution'
+
 
 exit $((Errors<125?Errors:125))

@@ -19,7 +19,7 @@ Source Package Installation Instructions:
   (4) If the bin/package script does not exist then run:
 		test -d bin || mkdir bin
 		url=$URL/package
-		(wget -O bin/package $url||curl $url||hurl $url) > bin/package
+		(wget -O bin/package $url||curl -L $url||hurl $url) > bin/package
 		chmod +x bin/package
   (5) Determine the list of package names you want from the download site, then
       use the package(1) command to do the actual download:
@@ -93,6 +93,23 @@ All recorded changes follow.
 
 :::::::: INIT ::::::::
 
+11-12-13 iffe.sh: add /*<NOSTDIO>*/ test code comment to disable default #include <stdio.h>
+11-11-11 C+probe: test for .so before .sl
+11-10-26 package.sh: don't forget about *.pkg for admin update
+11-10-18 cc.*-icc: update and add more
+11-10-11 package.sh: handle package make|view when no source installed
+11-09-11 package.sh: count admin '*** termination code' errors
+11-08-31 mamake.c: add -e, ignore use recursive prereq timestamps
+11-08-29 iffe.sh: add ``set stdio try1.h - try2.h ...''
+11-08-29 iffe.sh: trap EXIT => trap 0 for ancient sh
+11-08-11 iffe.sh: handle ancient sort that doesn't have -k
+11-06-01 make.probe: add more /lib64 logic
+11-05-01 package.sh: fix admin ditto to sync LICENSES too
+11-03-25 package.sh: initialize { $SED $TR } before first use!
+11-03-21 package.sh: fix vpath probes
+11-03-17 iffe.sh: fix cleanup to rm $tmp* instead of $tmp*.*
+11-02-24 package.sh: change curl usage to "curl -L ..."
+11-02-11 package.sh,C+probe,make.probe,mamprobe.sh: add ###.*archiac.*###
 11-02-02 Makefile: add :MAPLIB: check for ancient -lw
 11-02-02 make.probe: handle -print-multi-directory => 64 => /usr/lib64 /lib64
 11-02-02 package.sh: HOSTTYPE=*,*cc*[,-*,...] sets CC [ and CCFLAGS ]

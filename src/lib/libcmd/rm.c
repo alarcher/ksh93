@@ -1,14 +1,14 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1992-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1992-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
-*                  Common Public License, Version 1.0                  *
+*                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
 *                                                                      *
 *                A copy of the License is available at                 *
-*            http://www.opensource.org/licenses/cpl1.0.txt             *
-*         (with md5 checksum 059e8cd6165cb4c31e351f2b69388fd9)         *
+*          http://www.eclipse.org/org/documents/epl-v10.html           *
+*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
 *                                                                      *
 *              Information and Software Systems Research               *
 *                            AT&T Research                             *
@@ -27,7 +27,7 @@
  */
 
 static const char usage[] =
-"[-?\n@(#)$Id: rm (AT&T Research) 2010-12-10 $\n]"
+"[-?\n@(#)$Id: rm (AT&T Research) 2011-03-26 $\n]"
 USAGE_LICENSE
 "[+NAME?rm - remove files]"
 "[+DESCRIPTION?\brm\b removes the named \afile\a arguments. By default it"
@@ -264,7 +264,7 @@ rm(State_t* state, register FTSENT* ent)
 				break;
 			}
 		}
-		else if (!state->force && state->terminal && eaccess(path, W_OK))
+		else if (!(ent->fts_info & FTS_SL) && !state->force && state->terminal && eaccess(path, W_OK))
 		{
 			if ((v = astquery(-1, "override protection %s for %s? ",
 #ifdef ETXTBSY

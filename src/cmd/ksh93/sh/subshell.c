@@ -1,14 +1,14 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
-*                  Common Public License, Version 1.0                  *
+*                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
 *                                                                      *
 *                A copy of the License is available at                 *
-*            http://www.opensource.org/licenses/cpl1.0.txt             *
-*         (with md5 checksum 059e8cd6165cb4c31e351f2b69388fd9)         *
+*          http://www.eclipse.org/org/documents/epl-v10.html           *
+*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
 *                                                                      *
 *              Information and Software Systems Research               *
 *                            AT&T Research                             *
@@ -242,7 +242,7 @@ Namval_t *sh_assignok(register Namval_t *np,int add)
 	if(!sp->shpwd || np==SH_LEVELNOD || np==L_ARGNOD || np==SH_SUBSCRNOD || np==SH_NAMENOD)
 		return(np);
 	/* don't bother to save if in newer scope */
-	if(sp->var!=shp->var_tree && shp->last_root==shp->var_tree)
+	if(sp->var!=shp->var_tree && sp->var!=shp->var_base && shp->last_root==shp->var_tree)
 		return(np);
 	if((ap=nv_arrayptr(np)) && (mp=nv_opensub(np)))
 	{
@@ -304,7 +304,7 @@ static void nv_restore(struct subshell *sp)
 	register Namval_t *mp, *np;
 	const char *save = sp->shpwd;
 	Namval_t	*mpnext;
-	int		flags;
+	int		flags,nofree;
 	sp->shpwd = 0;	/* make sure sh_assignok doesn't save with nv_unset() */
 	for(lp=sp->svar; lp; lp=lq)
 	{
@@ -327,7 +327,9 @@ static void nv_restore(struct subshell *sp)
 		nv_setsize(mp,nv_size(np));
 		if(!(flags&NV_MINIMAL))
 			mp->nvenv = np->nvenv;
-		mp->nvfun = np->nvfun;
+		nofree = mp->nvfun?mp->nvfun->nofree:0;
+		if((mp->nvfun = np->nvfun) && nofree)
+			mp->nvfun->nofree = nofree;
 		if(nv_isattr(np,NV_IDENT))
 		{
 			nv_offattr(np,NV_IDENT);
@@ -462,6 +464,7 @@ Sfio_t *sh_subshell(Shell_t *shp,Shnode_t *t, int flags, int comsub)
 	int jmpval,nsig=0,duped=0;
 	int savecurenv = shp->curenv;
 	int savejobpgid = job.curpgid;
+	int *saveexitval = job.exitval;
 	int16_t subshell;
 	char *savsig;
 	Sfio_t *iop=0;
@@ -501,7 +504,11 @@ Sfio_t *sh_subshell(Shell_t *shp,Shnode_t *t, int flags, int comsub)
 #endif /* SHOPT_COSHELL */
 	/* make sure initialization has occurred */ 
 	if(!shp->pathlist)
+	{
+		shp->pathinit = 1;
 		path_get(shp,".");
+		shp->pathinit = 0;
+	}
 	sp->pathlist = path_dup((Pathcomp_t*)shp->pathlist);
 	if(!shp->pwd)
 		path_pwd(shp,0);
@@ -630,6 +637,8 @@ Sfio_t *sh_subshell(Shell_t *shp,Shnode_t *t, int flags, int comsub)
 					((struct checkpt*)shp->jmplist)->mode = SH_JMPERREXIT;
 					errormsg(SH_DICT,ERROR_system(1),e_toomany);
 				}
+				if(fd >= shp->gd->lim.open_max)
+					sh_iovalidfd(shp,fd);
 				shp->sftable[fd] = iop;
 				fcntl(fd,F_SETFD,FD_CLOEXEC);
 				shp->fdstatus[fd] = (shp->fdstatus[1]|IOCLEX);
@@ -653,6 +662,7 @@ Sfio_t *sh_subshell(Shell_t *shp,Shnode_t *t, int flags, int comsub)
 	job_subrestore(sp->jobs);
 	shp->jobenv = savecurenv;
 	job.curpgid = savejobpgid;
+	job.exitval = saveexitval;
 	shp->bckpid = sp->bckpid;
 	if(sp->shpwd)	/* restore environment if saved */
 	{

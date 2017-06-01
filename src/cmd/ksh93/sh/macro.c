@@ -1,14 +1,14 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
-*                  Common Public License, Version 1.0                  *
+*                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
 *                                                                      *
 *                A copy of the License is available at                 *
-*            http://www.opensource.org/licenses/cpl1.0.txt             *
-*         (with md5 checksum 059e8cd6165cb4c31e351f2b69388fd9)         *
+*          http://www.eclipse.org/org/documents/epl-v10.html           *
+*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
 *                                                                      *
 *              Information and Software Systems Research               *
 *                            AT&T Research                             *
@@ -56,6 +56,10 @@
 #else
 #   define mbchar(p)       (*(unsigned char*)p++)
 #endif /* SHOPT_MULTIBYTE */
+
+#if _WINIX
+    static int Skip;
+#endif /*_WINIX */
 
 static int	_c_;
 typedef struct  _mac_
@@ -355,6 +359,7 @@ void sh_machere(Shell_t *shp,Sfio_t *infile, Sfio_t *outfile, char *string)
 				Fcin_t	save2;
 				int	offset = stktell(stkp);
 				int	offset2;
+				fcnotify(0,lp);
 				sfputc(stkp,c);
 				if(n==S_LBRA)
 				{
@@ -501,7 +506,7 @@ static void copyto(register Mac_t *mp,int endch, int newquote)
 					int		i;
 					unsigned char	mb[8];
 
-					n = wctomb((char*)mb, c);
+					n = mbconv((char*)mb, c);
 					for(i=0;i<n;i++)
 						sfputc(stkp,mb[i]);
 				}
@@ -799,6 +804,13 @@ e_badsubscript,*cp);
 					sfwrite(stkp,first,c);
 				first = fcseek(c);
 				tilde_expand2(mp->shp,tilde);
+#if _WINIX
+				if(Skip)
+				{
+					first = cp = fcseek(Skip);
+					Skip = 0;
+				}
+#endif /*_WINIX */
 				tilde = -1;
 				c=0;
 			}
@@ -1091,6 +1103,7 @@ static int varsub(Mac_t *mp)
 	Namarr_t	*ap=0;
 	int		dolmax=0, vsize= -1, offset= -1, nulflg, replen=0, bysub=0;
 	char		idbuff[3], *id = idbuff, *pattern=0, *repstr, *arrmax=0;
+	char		*idx = 0;
 	int		var=1,addsub=0,oldpat=mp->pattern,idnum=0,flag=0,d;
 	Stk_t		*stkp = mp->shp->stk;
 retry1:
@@ -1254,7 +1267,7 @@ retry1:
 			}
 		}
 		while(type && c=='.');
-		if(c==RBRACE && type &&  fcpeek(-2)=='.')
+		if(type!=M_VNAME && c==RBRACE && type &&  fcpeek(-2)=='.')
 		{
 			/* ${x.} or ${x..} */
 			if(fcpeek(-3) == '.')
@@ -1480,7 +1493,7 @@ retry1:
 		if(type==M_NAMESCAN || type==M_NAMECOUNT)
 		{
 			mp->shp->last_root = mp->shp->var_tree;
-			id = prefix(mp->shp,id);
+			id = idx = prefix(mp->shp,id);
 			stkseek(stkp,offset);
 			if(type==M_NAMECOUNT)
 			{
@@ -1560,7 +1573,7 @@ retry1:
 		{
 			int newops = (c=='#' || c == '%' || c=='/');
 			offset = stktell(stkp);
-			if(newops && sh_isoption(SH_NOUNSET) && *id && (!np || nv_isnull(np)))
+			if(newops && sh_isoption(SH_NOUNSET) && *id && id!=idbuff  && (!np || nv_isnull(np)))
 				errormsg(SH_DICT,ERROR_exit(1),e_notset,id);
 			if(c=='/' ||c==':' || ((!v || (nulflg && *v==0)) ^ (c=='+'||c=='#'||c=='%')))
 			{
@@ -1771,6 +1784,7 @@ retry2:
 				v= "";
 			if(c=='/' || c=='#' || c== '%')
 			{
+				int index = 0;
 				flag = (type || c=='/')?(STR_GROUP|STR_MAXIMAL):STR_GROUP;
 				if(c!='/')
 					flag |= STR_LEFT;
@@ -1784,7 +1798,7 @@ retry2:
 					else
 						nmatch=strgrpmatch(v,pattern,match,elementsof(match)/2,flag);
 					if(nmatch && replen>0)
-						sh_setmatch(v,vsize,nmatch,match);
+						sh_setmatch(mp->shp,v,vsize,nmatch,match,index++);
 					if(nmatch)
 					{
 						vlast = v;
@@ -1816,7 +1830,7 @@ retry2:
 					break;
 				}
 				if(replen==0)
-					sh_setmatch(vlast,vsize_last,nmatch,match);
+					sh_setmatch(mp->shp,vlast,vsize_last,nmatch,match,index++);
 			}
 			if(vsize)
 				mac_copy(mp,v,vsize>0?vsize:strlen(v));
@@ -1907,8 +1921,6 @@ retry2:
 		}
 		if(arrmax)
 			free((void*)arrmax);
-		if(pattern)
-			free((void*)pattern);
 	}
 	else if(argp)
 	{
@@ -1963,6 +1975,10 @@ retry2:
 	}
 	if(np)
 		nv_close(np);
+	if(pattern)
+		free(pattern);
+	if(idx)
+		free(idx);
 	return(1);
 nosub:
 	if(type==M_BRACE && sh_lexstates[ST_NORM][c]==S_BREAK)
@@ -1993,7 +2009,10 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 	struct slnod            *saveslp = mp->shp->st.staklist;
 	struct _mac_		savemac;
 	int			savtop = stktell(stkp);
-	char			lastc, *savptr = stkfreeze(stkp,0);
+	char			lastc=0, *savptr = stkfreeze(stkp,0);
+#if SHOPT_MULTIBYTE
+	wchar_t			lastw=0;
+#endif /* SHOPT_MULTIBYTE */
 	int			was_history = sh_isstate(SH_HISTORY);
 	int			was_verbose = sh_isstate(SH_VERBOSE);
 	int			was_interactive = sh_isstate(SH_INTERACTIVE);
@@ -2116,7 +2135,6 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 	mp->ifsp = nv_getval(np);
 	stkset(stkp,savptr,savtop);
 	newlines = 0;
-	lastc = 0;
 	sfsetbuf(sp,(void*)sp,0);
 	bufsize = sfvalue(sp);
 	/* read command substitution output and put on stack or here-doc */
@@ -2167,6 +2185,17 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 		}
 		else if(lastc)
 		{
+#if SHOPT_MULTIBYTE
+			if(lastw)
+			{
+				int	n;
+				char	mb[8];
+				n = mbconv(mb, lastw);
+				mac_copy(mp,mb,n);
+				lastw = 0;
+			}
+			else
+#endif /* SHOPT_MULTIBYTE */
 			mac_copy(mp,&lastc,1);
 			lastc = 0;
 		}
@@ -2175,8 +2204,22 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 			str[c] = 0;
 		else
 		{
+			ssize_t len = 1;
+
 			/* can't write past buffer so save last character */
-			lastc = str[--c];
+#if SHOPT_MULTIBYTE
+			if ((len = mbsize(str))>1)
+			{
+				len = mb2wc(lastw,str,len);
+				if (len < 0)
+				{
+					lastw = 0;
+					len = 1;
+				}
+			}
+#endif /* SHOPT_MULTIBYTE */
+			c -= len;
+			lastc = str[c];
 			str[c] = 0;
 		}
 		mac_copy(mp,str,c);
@@ -2194,7 +2237,21 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 			sfnputc(stkp,'\n',newlines);
 	}
 	if(lastc)
+	{
+#if SHOPT_MULTIBYTE
+		if(lastw)
+		{
+			int	n;
+			char	mb[8];
+			n = mbconv(mb, lastw);
+			mac_copy(mp,mb,n);
+			lastw = 0;
+		}
+		else
+#endif /* SHOPT_MULTIBYTE */
 		mac_copy(mp,&lastc,1);
+		lastc = 0;
+	}
 	sfclose(sp);
 	return;
 }
@@ -2622,10 +2679,40 @@ static char *sh_tilde(Shell_t *shp,register const char *string)
 			cp = nv_getval(sh_scoped(shp,OLDPWDNOD));
 		return(cp);
 	}
+#if _WINIX
+	if(fcgetc(c)=='/')
+	{
+		char	*str;
+		int	n=0,offset=staktell();
+		stakputs(string);
+		do
+		{
+			stakputc(c);
+			n++;
+		}
+		while (fcgetc(c) && c!='/');
+		stakputc(0);
+		if(c)
+			fcseek(-1);
+		str = stakseek(offset);
+		Skip = n;
+		if(logins_tree && (np=nv_search(str,logins_tree,0)))
+			return(nv_getval(np));
+		if(pw = getpwnam(str))
+		{
+			string = str;
+			goto skip;
+		}
+		Skip = 0;
+	}
+#endif /* _WINIX */
 	if(logins_tree && (np=nv_search(string,logins_tree,0)))
 		return(nv_getval(np));
 	if(!(pw = getpwnam(string)))
 		return(NIL(char*));
+#if _WINIX
+skip:
+#endif /* _WINIX */
 	if(!logins_tree)
 		logins_tree = dtopen(&_Nvdisc,Dtbag);
 	if(np=nv_search(string,logins_tree,NV_ADD))

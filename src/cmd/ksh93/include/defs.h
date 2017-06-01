@@ -1,14 +1,14 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
-*                  Common Public License, Version 1.0                  *
+*                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
 *                                                                      *
 *                A copy of the License is available at                 *
-*            http://www.opensource.org/licenses/cpl1.0.txt             *
-*         (with md5 checksum 059e8cd6165cb4c31e351f2b69388fd9)         *
+*          http://www.eclipse.org/org/documents/epl-v10.html           *
+*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
 *                                                                      *
 *              Information and Software Systems Research               *
 *                            AT&T Research                             *
@@ -113,7 +113,7 @@ struct limits
 
 #ifndef SH_wait_f_defined
     typedef int (*Shwait_f)(int, long, int);
-    #define     SH_wait_f_defined
+#   define     SH_wait_f_defined
 #endif
 
 
@@ -176,6 +176,7 @@ struct shared
 	char		*comdiv;	/* points to sh -c argument */ \
 	char		*prefix;	/* prefix for compound assignment */ \
 	sigjmp_buf	*jmplist;	/* longjmp return stack */ \
+	char		*fifo;		/* fifo name for process sub */ \
 	int		oldexit; \
 	pid_t		bckpid;		/* background process id */ \
 	pid_t		cpid; \
@@ -185,6 +186,7 @@ struct shared
 	int		topfd; \
 	int		savesig; \
 	unsigned char	*sigflag;	/* pointer to signal states */ \
+	char		openmatch; \
 	char		intrap; \
 	char		login_sh; \
 	char		lastbase; \
@@ -198,11 +200,13 @@ struct shared
 	char		indebug; 	/* set when in debug trap */ \
 	unsigned char	ignsig;		/* ignored signal in subshell */ \
 	unsigned char	lastsig;	/* last signal received */ \
+	char		pathinit;	/* pathinit called from subshell */ \
 	char		comsub;		/* set when in $() comsub */ \
 	char		subshare;	/* set when in ${..} comsub */ \
 	char		toomany;	/* set when out of fd's */ \
 	char		instance;	/* in set_instance */ \
 	char		decomma;	/* decimal_point=',' */ \
+	char		redir0;		/* redirect of 0 */ \
 	char		*readscript;	/* set before reading a script */ \
 	int		subdup;		/* bitmask for dups of 1 */ \
 	int		*inpipe;	/* input pipe pointer */ \
@@ -246,6 +250,8 @@ struct shared
 	void		*mktype; \
 	Sfio_t		*strbuf; \
 	Sfio_t		*strbuf2; \
+	Dt_t		*first_root; \
+	Dt_t		*prefix_root; \
 	Dt_t		*last_root; \
 	Dt_t		*prev_root; \
 	Dt_t		*fpathdict; \
@@ -415,7 +421,7 @@ extern char 		*sh_mactry(Shell_t*,char*);
 extern void		sh_printopts(Shopt_t,int,Shopt_t*);
 extern int 		sh_readline(Shell_t*,char**,int,int,long);
 extern Sfio_t		*sh_sfeval(char*[]);
-extern void		sh_setmatch(const char*,int,int,int[]);
+extern void		sh_setmatch(Shell_t*,const char*,int,int,int[],int);
 extern Dt_t		*sh_subaliastree(int);
 extern void             sh_scope(Shell_t*, struct argnod*, int);
 extern Namval_t		*sh_scoped(Shell_t*, Namval_t*);

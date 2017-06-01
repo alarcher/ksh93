@@ -15,6 +15,7 @@ SHCOMP := shcomp$(RELEASE)
  * override SHOPT_foo=1 can be placed one per line in the build dir Makeargs
  */
 
+SHOPT_2DMATCH == 1		/* two dimensional .sh.match for ${var//pat/str} */
 SHOPT_ACCT ==  			/* accounting */
 SHOPT_ACCTFILE ==  		/* per user accounting info */
 SHOPT_AUDIT ==
@@ -77,7 +78,7 @@ else
 	LIBS_req = +lshell$(RELEASE)
 end
 
-:PACKAGE: ast$(libtype):20100309 order:coshell --clobber=!($(SH))
+:PACKAGE: ast$(libtype):20100309 coshell:order --clobber=!($(SH))
 
 .SOURCE : edit sh bltins data tests fun
 .SOURCE.h : include 
@@ -207,10 +208,10 @@ end
 :: shtests \
 	alias.sh append.sh arith.sh arrays.sh arrays2.sh \
 	attributes.sh basic.sh bracket.sh builtins.sh case.sh \
-	comvar.sh coprocess.sh cubetype.sh enum.sh exit.sh \
+	comvar.sh comvario.sh coprocess.sh cubetype.sh enum.sh exit.sh \
 	expand.sh functions.sh glob.sh grep.sh heredoc.sh io.sh \
 	leaks.sh locale.sh math.sh nameref.sh options.sh path.sh \
-	pointtype.sh pty.sh quoting.sh quoting2.sh recttype.sh \
+	pointtype.sh pty.sh quoting.sh quoting2.sh readcsv.sh recttype.sh \
 	restricted.sh return.sh select.sh shtests sigchld.sh \
 	signal.sh statics.sh subshell.sh substring.sh tilde.sh \
 	timetype.sh treemove.sh types.sh variables.sh \

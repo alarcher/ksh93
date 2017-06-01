@@ -1,14 +1,14 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
-#                  Common Public License, Version 1.0                  #
+#                 Eclipse Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
 #                                                                      #
 #                A copy of the License is available at                 #
-#            http://www.opensource.org/licenses/cpl1.0.txt             #
-#         (with md5 checksum 059e8cd6165cb4c31e351f2b69388fd9)         #
+#          http://www.eclipse.org/org/documents/epl-v10.html           #
+#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
 #                                                                      #
 #              Information and Software Systems Research               #
 #                            AT&T Research                             #
@@ -394,5 +394,19 @@ unset s
 if	command typeset -M totitle s 2> /dev/null
 then	[[ $(typeset +p s) == 'typeset -M totitle s' ]] || err_exit 'typeset -M totitle does not display correctly with typeset -p'
 fi
+
+{ $SHELL  <<-  \EOF
+	compound -a a1
+	for ((i=1 ; i < 100 ; i++ ))
+        do	[[ "$( typeset + a1[$i] )" == '' ]] && a1[$i].text='hello'
+	done
+	[[ ${a1[70].text} == hello ]]
+EOF
+} 2> /dev/null
+(( $? )) && err_exit  'typeset + a[i] not working'
+
+typeset groupDB="" userDB=""
+typeset -l -L1 DBPick=""
+[[ -n "$groupDB" ]]  && err_exit 'typeset -l -L1 causes unwanted side effect'
 
 exit $((Errors<125?Errors:125))

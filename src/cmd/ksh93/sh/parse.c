@@ -1,14 +1,14 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
-*                  Common Public License, Version 1.0                  *
+*                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
 *                                                                      *
 *                A copy of the License is available at                 *
-*            http://www.opensource.org/licenses/cpl1.0.txt             *
-*         (with md5 checksum 059e8cd6165cb4c31e351f2b69388fd9)         *
+*          http://www.eclipse.org/org/documents/epl-v10.html           *
+*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
 *                                                                      *
 *              Information and Software Systems Research               *
 *                            AT&T Research                             *
@@ -42,9 +42,13 @@
 #include	"test.h"
 #include	"history.h"
 
-#define HERE_MEM	1024	/* size of here-docs kept in memory */
+#define HERE_MEM	SF_BUFSIZE	/* size of here-docs kept in memory */
 
+#if CDT_VERSION < 20111111L
 #define hash	nvlink.hl._hash
+#else
+#define hash	nvlink.lh.__hash
+#endif
 
 /* These routines are local to this module */
 
@@ -726,7 +730,7 @@ static Shnode_t	*arithfor(Lex_t *lexp,register Shnode_t *tf)
 		n = sh_lex(lexp);
 	if(n!=DOSYM && n!=LBRACE)
 		sh_syntax(lexp);
-	tw->wh.dotre = sh_cmd(lexp,n==DOSYM?DONESYM:RBRACE,SH_NL);
+	tw->wh.dotre = sh_cmd(lexp,n==DOSYM?DONESYM:RBRACE,SH_NL|SH_SEMI);
 	tw->wh.whtyp = TWH;
 	return(tf);
 
@@ -1431,7 +1435,7 @@ static Shnode_t *simple(Lex_t *lexp,int flag, struct ionod *io)
 				if(assignment==1)
 				{
 					last = strchr(argp->argval,'=');
-					if(last && (last[-1]==']'|| (last[-1]=='+' && last[-2]==']')) && (cp=strchr(argp->argval,'[')) && (cp < last))
+					if(last && (last[-1]==']'|| (last[-1]=='+' && last[-2]==']')) && (cp=strchr(argp->argval,'[')) && (cp < last) && cp[-1]!='.')
 						last = cp;
 					stkseek(stkp,ARGVAL);
 					sfwrite(stkp,argp->argval,last-argp->argval);
@@ -1484,7 +1488,6 @@ static Shnode_t *simple(Lex_t *lexp,int flag, struct ionod *io)
 		tok = sh_lex(lexp);
 		if(tok==LABLSYM && (flag&SH_ASSIGN))
 			lexp->token = tok = 0;
-#if SHOPT_DEVFD
 		if((tok==IPROCSYM || tok==OPROCSYM))
 		{
 			argp = process_sub(lexp,tok);
@@ -1493,7 +1496,6 @@ static Shnode_t *simple(Lex_t *lexp,int flag, struct ionod *io)
 			argtail = &(argp->argnxt.ap);
 			goto retry;
 		}
-#endif	/* SHOPT_DEVFD */
 		if(tok==LPAREN)
 		{
 			if(argp->argflag&ARG_ASSIGN)

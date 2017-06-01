@@ -1,14 +1,14 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
-*                  Common Public License, Version 1.0                  *
+*                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
 *                                                                      *
 *                A copy of the License is available at                 *
-*            http://www.opensource.org/licenses/cpl1.0.txt             *
-*         (with md5 checksum 059e8cd6165cb4c31e351f2b69388fd9)         *
+*          http://www.eclipse.org/org/documents/epl-v10.html           *
+*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
 *                                                                      *
 *              Information and Software Systems Research               *
 *                            AT&T Research                             *
@@ -46,6 +46,7 @@
 #define V_FLAG	0x20	/* use default value */
 #define	C_FLAG	0x40	/* read into compound variable */
 #define D_FLAG	8	/* must be number of bits for all flags */
+#define	SS_FLAG	0x80	/* read .csv format file */
 
 struct read_save
 {
@@ -122,6 +123,9 @@ int	b_read(int argc,char *argv[], void *extra)
 	    case 's':
 		/* save in history file */
 		flags |= S_FLAG;
+		break;
+	    case 'S':
+		flags |= SS_FLAG;
 		break;
 	    case 'u':
 		fd = (int)opt_info.num;
@@ -223,7 +227,8 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 	int			jmpval=0;
 	ssize_t			size = 0;
 	int			binary;
-	int			oflags=NV_NOASSIGN|NV_VARNAME;
+	int			oflags=NV_ASSIGN|NV_VARNAME;
+	char			inquote = 0;
 	struct	checkpt		buff;
 	if(!(iop=shp->sftable[fd]) && !(iop=sh_iostream(shp,fd)))
 		return(1);
@@ -296,13 +301,19 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 			nv_putval(mp, ifs, NV_RDONLY);
 		}
 		shp->ifstable[0] = S_EOF;
+		if((flags&SS_FLAG))
+		{
+			shp->ifstable['"'] = S_QUOTE;
+			shp->ifstable['\r'] = S_ERR;
+		}
 	}
 	sfclrerr(iop);
 	for(nfp=np->nvfun; nfp; nfp = nfp->next)
 	{
 		if(nfp->disc && nfp->disc->readf)
 		{
-			if((c=(*nfp->disc->readf)(np,iop,delim,nfp))>=0)
+			Namval_t *mp = nv_open(name,shp->var_tree,oflags|NV_NOREF);
+			if((c=(*nfp->disc->readf)(mp,iop,delim,nfp))>=0)
 				return(c);
 		}
 	}
@@ -313,7 +324,7 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 	}
 	was_write = (sfset(iop,SF_WRITE,0)&SF_WRITE)!=0;
 	if(fd==0)
-		was_share = (sfset(iop,SF_SHARE,1)&SF_SHARE)!=0;
+		was_share = (sfset(iop,SF_SHARE,shp->redir0!=2)&SF_SHARE)!=0;
 	if(timeout || (shp->fdstatus[fd]&(IOTTY|IONOSEEK)))
 	{
 		sh_pushcontext(shp,&buff,1);
@@ -454,7 +465,11 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 	else if(cp = (unsigned char*)sfgetr(iop,delim,0))
 		c = sfvalue(iop);
 	else if(cp = (unsigned char*)sfgetr(iop,delim,-1))
+	{
 		c = sfvalue(iop)+1;
+		if(!sferror(iop) && sfgetc(iop) >=0)
+			errormsg(SH_DICT,ERROR_exit(1),e_overlimit,"line length");
+	}
 	if(timeslot)
 		timerdel(timeslot);
 	if((flags&S_FLAG) && !shp->gd->hist_ptr)
@@ -530,21 +545,27 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 				c = 0;
 			continue;
 #endif /*SHOPT_MULTIBYTE */
+		    case S_QUOTE:
+			c = shp->ifstable[*cp++];
+			inquote = !inquote;
+			goto skip;
 		    case S_ESC:
 			/* process escape character */
 			if((c = shp->ifstable[*cp++]) == S_NL)
 				was_escape = 1;
 			else
 				c = 0;
+		skip:
 			if(val)
 			{
 				stakputs(val);
 				use_stak = 1;
-				was_escape = 1;
 				*val = 0;
 			}
 			continue;
 
+		    case S_ERR:
+			cp++;
 		    case S_EOF:
 			/* check for end of buffer */
 			if(val && *val)
@@ -632,6 +653,40 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 				while((c=shp->ifstable[*cp++])==0)
 					if(!wrd)
 						wrd = 1;
+				if(inquote)
+				{
+					if(c==S_QUOTE)
+					{
+						if(shp->ifstable[*cp]==S_QUOTE)
+						{
+							if(val)
+							{
+								stakwrite(val,cp-(unsigned char*)val);
+								use_stak = 1;
+							}
+							val = (char*)++cp;
+						}
+						else
+							break;
+					}
+					if(c && c!=S_EOF)
+					{
+						if(c==S_NL)
+						{
+							if(val)
+							{
+								stakwrite(val,cp-(unsigned char*)val);
+								use_stak=1;
+							}
+							if(cp = (unsigned char*)sfgetr(iop,delim,0))
+								c = sfvalue(iop);
+							else if(cp = (unsigned char*)sfgetr(iop,delim,-1))
+								c = sfvalue(iop)+1;
+							val = (char*)cp;
+						}
+						continue;
+					}
+				}
 				if(!del&&c==S_DELIM)
 					del = cp - 1;
 				if(name || c==S_NL || c==S_ESC || c==S_EOF || c==S_MBYTE)
@@ -725,7 +780,7 @@ done:
 	if(!was_share)
 		sfset(iop,SF_SHARE,0);
 	nv_close(np);
-	if((flags>>D_FLAG) && (shp->fdstatus[fd]&IOTTY))
+	if(shp->fdstatus[fd]&IOTTY)
 		tty_cooked(fd);
 	if(flags&S_FLAG)
 		hist_flush(shp->gd->hist_ptr);

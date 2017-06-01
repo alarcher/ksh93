@@ -1,14 +1,14 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
-*                  Common Public License, Version 1.0                  *
+*                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
 *                                                                      *
 *                A copy of the License is available at                 *
-*            http://www.opensource.org/licenses/cpl1.0.txt             *
-*         (with md5 checksum 059e8cd6165cb4c31e351f2b69388fd9)         *
+*          http://www.eclipse.org/org/documents/epl-v10.html           *
+*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
 *                                                                      *
 *              Information and Software Systems Research               *
 *                            AT&T Research                             *
@@ -30,9 +30,12 @@
 #ifndef _CMDARG_H
 #define _CMDARG_H
 
+#include <error.h>
+
 #define CMD_CHECKED	(1<<9)		/* cmdopen() argv[0] ok		*/
 #define CMD_EMPTY	(1<<0)		/* run once, even if no args	*/
 #define CMD_EXACT	(1<<1)		/* last command must have argmax*/
+#define CMD_EXIT	(1<<11)		/* fatal error_info.exit()	*/
 #define CMD_IGNORE	(1<<2)		/* ignore EXIT_QUIT exit	*/
 #define CMD_INSERT	(1<<3)		/* argpat for insertion		*/
 #define CMD_MINIMUM	(1<<4)		/* argmax is a minimum		*/
@@ -44,13 +47,15 @@
 
 #define CMD_USER	(1<<12)
 
-typedef struct				/* cmd + args info		*/
+typedef struct Cmdarg_s			/* cmd + args info		*/
 {
 	struct
 	{
 	size_t		args;		/* total args			*/
 	size_t		commands;	/* total commands		*/
 	}		total;
+
+	Error_f		errorf;		/* optional error callback	*/
 
 	int		argcount;	/* current arg count		*/
 	int		argmax;		/* max # args			*/
@@ -74,7 +79,10 @@ typedef struct				/* cmd + args info		*/
 #define extern		__EXPORT__
 #endif
 
+#ifndef cmdopen
 extern Cmdarg_t*	cmdopen(char**, int, int, const char*, int);
+#endif
+extern Cmdarg_t*	cmdopen_20110505(char**, int, int, const char*, int, Error_f);
 extern int		cmdflush(Cmdarg_t*);
 extern int		cmdarg(Cmdarg_t*, const char*, int);
 extern int		cmdclose(Cmdarg_t*);
