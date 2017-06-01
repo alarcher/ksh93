@@ -52,21 +52,36 @@ char *nv_getvtree(Namval_t*, Namfun_t *);
 static void put_tree(Namval_t*, const char*, int,Namfun_t*);
 static char *walk_tree(Namval_t*, Namval_t*, int);
 
-static int read_tree(Namval_t* np, Sfio_t *iop, int n, Namfun_t *dp)
+static int read_tree(Namval_t* np, Sfio_t *in, int n, Namfun_t *dp)
 {
 	Shell_t	*shp = sh_ptr(np);
-	Sfio_t	*sp;
+	Sfio_t	*sp, *iop;
 	char	*cp;
 	int	c;
+	typedef	int (*Shread_t)(Shell_t*, Sfio_t*, Sfio_t*);
+	Shread_t fun;
+	fun = *(void**)(dp+1);
 	if(n>=0)
 		return(-1);
+	if(fun)
+	{
+		iop = sftmp(SF_BUFSIZE*sizeof(char*));
+		sfputr(iop,nv_name(np),'=');
+		c = (*fun)(shp,in,iop);
+		sfseek(iop, (Sfoff_t)0, SEEK_SET);
+		goto done;
+	}
+	iop = in;
 	while((c = sfgetc(iop)) &&  isblank(c));
 	sfungetc(iop,c);
 	sfprintf(shp->strbuf,"%s=%c",nv_name(np),0);
 	cp = sfstruse(shp->strbuf);
 	sp = sfopen((Sfio_t*)0,cp,"s");
 	sfstack(iop,sp);
+done:
 	c=sh_eval(shp,iop,SH_READEVAL);
+	if(iop != in)
+		sfclose(in);
 	return(c);
 }
 
@@ -630,8 +645,9 @@ void nv_outnode(Namval_t *np, Sfio_t* out, int indent, int special)
 	int		scan,tabs=0,c,more,associative = 0;
 	int		saveI = Indent, dot=-1;
 	bool 		json = (special&NV_JSON);
+	bool 		json_last = (special&NV_JSON_LAST);
 	Shell_t		*shp = (Shell_t*)np->nvshell;
-	special	&= ~NV_JSON;
+	special	&= ~(NV_JSON|NV_JSON_LAST);
 	Indent = indent;
 	if(ap)
 	{
@@ -759,6 +775,8 @@ void nv_outnode(Namval_t *np, Sfio_t* out, int indent, int special)
 		if(ap && !array_assoc(ap))
 			ap->flags |= scan;
 		more = nv_nextsub(np);
+		if(json_last || (ap && !more))
+			json = 0;
 		c = json?',':'\n';
 		if(indent<0)
 		{
@@ -779,6 +797,27 @@ void nv_outnode(Namval_t *np, Sfio_t* out, int indent, int special)
 			sfnputc(out,'\t',indent);
 	}
 	Indent = saveI;
+}
+
+static void outname(Shell_t *shp, Sfio_t *out, char *name, int len, bool json)
+{
+	if(json)
+	{
+		if(len < 0)
+			len = strlen(name);
+		sfputc(out,'"');
+		if(*name=='[')
+		{
+			len-=2;
+			if(*++name == '\'')
+				len--;
+		}
+	}
+	else if(*name=='[' && name[-1]=='.')
+		name--;
+	sh_outname(shp,out,name, len);
+	if(json)
+		sfwrite(out,"\": ",3);
 }
 
 static void outval(char *name, const char *vname, struct Walk *wp)
@@ -923,11 +962,7 @@ static void outval(char *name, const char *vname, struct Walk *wp)
 			}
 #endif /* SHOPT_FIXEDARRAY */
 		}
-		if(json)
-			sfputc(wp->out,'"');
-		sh_outname(wp->shp,wp->out,name,-1);
-		if(json)
-			sfwrite(wp->out,"\": ",3);
+		outname(wp->shp,wp->out,name,-1, json);
 		if((np->nvalue.cp && np->nvalue.cp!=Empty) || nv_isattr(np,~(NV_MINIMAL|NV_NOFREE)) || nv_isvtree(np))  
 			if(!json)
 				sfputc(wp->out,(isarray==2?(wp->indent>=0?'\n':';'):'='));
@@ -937,7 +972,7 @@ static void outval(char *name, const char *vname, struct Walk *wp)
 	fp = np->nvfun;
 	if(*name=='.' && !isarray)
 		np->nvfun = 0;
-	nv_outnode(np, wp->out, wp->indent, special|(wp->flags&NV_JSON));
+	nv_outnode(np, wp->out, wp->indent, special|(wp->flags&(NV_JSON|NV_JSON_LAST)));
 	if(*name=='.' && !isarray)
 		np->nvfun = fp;
 	if(isarray && !special)
@@ -945,7 +980,10 @@ static void outval(char *name, const char *vname, struct Walk *wp)
 		if(wp->indent>0)
 		{
 			sfnputc(wp->out,'\t',wp->indent);
-			sfwrite(wp->out,json?"]\n":")\n",2);
+			if(json && !(wp->flags&NV_JSON_LAST))
+                                sfwrite(wp->out,"],\n",3);
+                        else
+				sfwrite(wp->out,json?"]\n":")\n",2);
 		}
 		else
 			sfwrite(wp->out,");",2);
@@ -967,6 +1005,7 @@ static char **genvalue(char **argv, const char *prefix, int n, struct Walk *wp)
 	bool		json = (wp->flags&NV_JSON);
 	bool		array_parent = (wp->flags&NV_ARRAY);
 	char		endchar = json?'}':')';
+	char		**names;
 	wp->flags &= ~NV_ARRAY;
 	if(n==0)
 		m = strlen(prefix);
@@ -1031,12 +1070,8 @@ static char **genvalue(char **argv, const char *prefix, int n, struct Walk *wp)
 					}
 					if(!array_parent)
 					{
-						if(json)
-							sfputc(outfile,'"');
-						sh_outname(shp,outfile,cp,nextcp-cp);
-						if(json)
-							sfwrite(outfile,"\": ",3);
-						else
+						outname(shp,outfile,cp,nextcp-cp, json);
+						if(!json)
 							sfputc(outfile,'=');
 					}
 					*nextcp = '.';
@@ -1113,6 +1148,8 @@ static char **genvalue(char **argv, const char *prefix, int n, struct Walk *wp)
 					if(argv[1][r]=='.' && strncmp(argv[0],argv[1],r)==0)
 						wp->flags &= ~NV_COMVAR;
 				}
+				if((wp->flags& NV_JSON) && (!argv[1] || strlen(argv[1])<m+n || memcmp(argv[1],arg,m+n-1)))
+					wp->flags |= NV_JSON_LAST;
 				outval(cp,arg,wp);
 				if(wp->array)
 				{
@@ -1146,11 +1183,12 @@ static char **genvalue(char **argv, const char *prefix, int n, struct Walk *wp)
 		if(wp->indent>0)
 			sfnputc(outfile,'\t',--wp->indent);
 		sfputc(outfile,endchar);
-		if(json && wp->indent>0)
+		if(json && wp->indent>0 && *argv && memcmp(arg,argv[-1],n)==0)
 			sfputc(outfile,',');
 		if(*argv && n && wp->indent<0)
 			sfputc(outfile,';');
 	}
+	wp->flags &= ~NV_JSON_LAST;
 	return(--argv);
 }
 
@@ -1379,7 +1417,8 @@ void nv_setvtree(register Namval_t *np)
 		sh_assignok(np,1);
 	if(nv_hasdisc(np, &treedisc))
 		return;
-	nfp = newof(NIL(void*),Namfun_t,1,0);
+	nfp = newof(NIL(void*),Namfun_t,1,sizeof(void*));
+	*(void**)(nfp+1)= 0;
 	nfp->disc = &treedisc;
 	nfp->dsize = sizeof(Namfun_t);
 	nv_stack(np, nfp);

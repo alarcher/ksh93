@@ -192,6 +192,11 @@ void sh_subfork(void)
 			sp->subpid = pid;
 		if(trap)
 			free((void*)trap);
+		if(comsub==1)
+		{
+			sh_close(sp->tmpfd);
+			sp->tmpfd = -1;
+		}
 		siglongjmp(*shp->jmplist,SH_JMPSUB);
 	}
 	else
@@ -205,11 +210,17 @@ void sh_subfork(void)
 		sh_offstate(shp,SH_MONITOR);
 		subshell_data = 0;
 		shp->subshell = 0;
+		shp->savesig = 0;
+		if(comsub==1)
+		{
+			sh_close(sp->pipefd);
+			sh_iorenumber(shp, sp->tmpfd, 1);
+			shp->savesig = -1;
+		}
 		shp->comsub = 0;
 		SH_SUBSHELLNOD->nvalue.s = 0;
 		sp->subpid=0;
 		shp->st.trapcom[0] = trap;
-		shp->savesig = 0;
 	}
 }
 
@@ -586,6 +597,18 @@ Sfio_t *sh_subshell(Shell_t *shp,Shnode_t *t, volatile int flags, int comsub)
 			sp->monitor = (sh_isstate(shp,SH_MONITOR)!=0);
 			job.jobcontrol=0;
 			sh_offstate(shp,SH_MONITOR);
+		}
+		if(comsub==1)
+		{
+			int fds[2];
+			sh_rpipe(fds);
+			sp->pipe = 0;
+			sp->pipefd = fds[0];
+			sp->tmpfd = fds[1];
+			sh_subfork();
+		}
+		else if(comsub)
+		{
 			sp->pipe = sp;
 			/* save sfstdout and status */
 			sp->saveout = sfswap(sfstdout,NIL(Sfio_t*));
@@ -593,7 +616,7 @@ Sfio_t *sh_subshell(Shell_t *shp,Shnode_t *t, volatile int flags, int comsub)
 			sp->tmpfd = -1;
 			sp->pipefd = -1;
 			/* use sftmp() file for standard output */
-			if(!(iop = sftmp(comsub==1?PIPE_BUF:IOBSIZE)))
+			if(!(iop = sftmp(IOBSIZE)))
 			{
 				sfswap(sp->saveout,sfstdout);
 				errormsg(SH_DICT,ERROR_system(1),e_tmpcreate);
@@ -650,19 +673,16 @@ Sfio_t *sh_subshell(Shell_t *shp,Shnode_t *t, volatile int flags, int comsub)
 		{
 			/* sftmp() file has been returned into pipe */
 			iop = sh_iostream(shp,sp->pipefd,sp->pipefd);
-			sfclose(sfstdout);
+			if(comsub!=1)
+				sfclose(sfstdout);
 		}
-		else
+		else if(comsub>1)
 		{
-			if(comsub!=1 && shp->spid)
+			if(shp->spid)
 			{
-				int c = shp->exitval;
+				int c = shp->savexit;
 				job_wait(shp->spid);
-				if(shp->exitval==ERROR_NOENT)
-				{
-					shp->exitval = c;
-					exitset(shp);
-				}
+				shp->exitval = c;
 				if(shp->pipepid==shp->spid)
 					shp->spid = 0;
 				shp->pipepid = 0;
@@ -832,7 +852,9 @@ Sfio_t *sh_subshell(Shell_t *shp,Shnode_t *t, volatile int flags, int comsub)
 	shp->savesig = 0;
 	if(nsig>0)
 		kill(getpid(),nsig);
-	if(sp->subpid)
+	if(comsub==1)
+		shp->spid = sp->subpid;
+	else if(sp->subpid)
 	{
 		job_wait(sp->subpid);
 		if(comsub>1)
