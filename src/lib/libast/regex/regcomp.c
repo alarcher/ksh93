@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -138,11 +138,16 @@ typedef struct Cenv_s
  * allocate a new Rex_t node
  */
 
+#if _BLD_DEBUG
+#define node(a,b,c,d,e)	node(a,b,c,d,e, const char* file, unsigned int line)
+#endif
+
 static Rex_t*
 node(Cenv_t* env, int type, int lo, int hi, size_t extra)
 {
 	register Rex_t*	e;
 
+	DEBUG_TEST(0x0800,(sfprintf(sfstdout, "%s:%d node(%d,%d,%d,%u)\n", file, line, type, lo, hi, sizeof(Rex_t) + extra)),(0));
 	if (e = (Rex_t*)alloc(env->disc, 0, sizeof(Rex_t) + extra))
 	{
 		memset(e, 0, sizeof(Rex_t) + extra);
@@ -158,6 +163,11 @@ node(Cenv_t* env, int type, int lo, int hi, size_t extra)
 	}
 	return e;
 }
+
+#if _BLD_DEBUG
+#undef	node
+#define node(a,b,c,d,e)	node(a,b,c,d,e,__FILE__,__LINE__)
+#endif
 
 /*
  * free a Trie_node_t node
@@ -1206,7 +1216,7 @@ bra(Cenv_t* env)
 		if (!(c = *env->cursor) || c == env->terminator || c == env->delimiter && (env->flags & REG_ESCAPE))
 			goto error;
 		env->cursor += (w = MBSIZE(env->cursor));
-		if (c == '\\' && ((env->flags & REG_CLASS_ESCAPE) || env->type >= SRE && env->parnest || *env->cursor == env->delimiter && (env->flags & REG_ESCAPE)))
+		if (c == '\\' && ((env->flags & REG_CLASS_ESCAPE) || *env->cursor == env->delimiter && (env->flags & REG_ESCAPE)))
 		{
 			if (*env->cursor)
 			{
@@ -1352,7 +1362,7 @@ bra(Cenv_t* env)
 					setadd(e->re.charclass, last);
 					elements++;
 				}
-				if ((c = regcollate((char*)env->cursor, (char**)&env->cursor, (char*)buf, sizeof(buf))) < 0)
+				if ((c = regcollate((char*)env->cursor, (char**)&env->cursor, (char*)buf, sizeof(buf), NiL)) < 0)
 					goto ecollate;
 				if (c > 1)
 					collate++;
@@ -1366,7 +1376,7 @@ bra(Cenv_t* env)
 			case '.':
 				if (env->regexp)
 					goto normal;
-				if ((c = regcollate((char*)env->cursor, (char**)&env->cursor, (char*)buf, sizeof(buf))) < 0)
+				if ((c = regcollate((char*)env->cursor, (char**)&env->cursor, (char*)buf, sizeof(buf), NiL)) < 0)
 					goto ecollate;
 				if (c > 1)
 					collate++;
@@ -1423,7 +1433,7 @@ bra(Cenv_t* env)
 		Cchr_t			key;
 		int			rw;
 		int			rc;
-		int			wc;
+		wchar_t			wc;
 		unsigned char*		rp;
 		unsigned char*		pp;
 		char*			wp;
@@ -1462,7 +1472,7 @@ bra(Cenv_t* env)
 			drop(env->disc, e);
 			if (ic = env->flags & REG_ICASE)
 				elements *= 2;
-			if (!(e = node(env, REX_COLL_CLASS, 1, 1, (elements + 2) * sizeof(Celt_t))))
+			if (!(e = node(env, REX_COLL_CLASS, 1, 1, (elements + 3) * sizeof(Celt_t))))
 				return 0;
 			ce = (Celt_t*)e->re.data;
 			e->re.collate.invert = neg;
@@ -1475,7 +1485,7 @@ bra(Cenv_t* env)
 					goto error;
 				pp = env->cursor;
 				env->cursor += (w = MBSIZE(env->cursor));
-				if (c == '\\' && ((env->flags & REG_CLASS_ESCAPE) || env->type >= SRE && env->parnest || *env->cursor == env->delimiter && (env->flags & REG_ESCAPE)))
+				if (c == '\\' && ((env->flags & REG_CLASS_ESCAPE) || *env->cursor == env->delimiter && (env->flags & REG_ESCAPE)))
 				{
 					if (*env->cursor)
 					{
@@ -1597,10 +1607,8 @@ bra(Cenv_t* env)
 							ce = col(ce, ic, rp, rw, rc, NiL, 0, 0);
 						pp = (unsigned char*)cb[inrange];
 						rp = env->cursor + 1;
-						if ((rw = regcollate((char*)env->cursor, (char**)&env->cursor, (char*)pp, COLL_KEY_MAX)) < 0)
+						if ((rw = regcollate((char*)env->cursor, (char**)&env->cursor, (char*)pp, COLL_KEY_MAX, &wc)) < 0)
 							goto ecollate;
-						wp = (char*)pp;
-						wc = mbchar(wp);
 						c = 0;
 						if (ic)
 						{
@@ -1613,11 +1621,19 @@ bra(Cenv_t* env)
 							else if (iswlower(wc))
 								c = 'l';
 						}
+						i = 1;
 						for (;;)
 						{
 							mbxfrm(key.key, (char*)pp, COLL_KEY_MAX);
 							if (!(cc = (Cchr_t*)dtsearch(dt, &key)) && !(cc = (Cchr_t*)dtprev(dt, &key)))
+							{
+								if (i)
+								{
+									c = *pp;
+									goto singleton;
+								}
 								goto ecollate;
+							}
 							xc = (tc = (Cchr_t*)dtprev(dt, cc)) && !strcasecmp((char*)tc->nam, (char*)cc->nam) ? tc : cc;
 							if (c == 'l' || c == 'L' && !(c = 0))
 								ce->typ = COLL_range_lc;
@@ -1627,7 +1643,14 @@ bra(Cenv_t* env)
 								ce->typ = COLL_range;
 							strcpy((char*)ce->beg, (char*)xc->key);
 							if (!(cc = (Cchr_t*)dtnext(dt, cc)))
+							{
+								if (i)
+								{
+									c = *pp;
+									goto singleton;
+								}
 								goto ecollate;
+							}
 							if (!strcasecmp((char*)xc->nam, (char*)cc->nam) && (tc = (Cchr_t*)dtnext(dt, cc)))
 								cc = tc;
 							strcpy((char*)ce->end, (char*)cc->key);
@@ -1646,6 +1669,7 @@ bra(Cenv_t* env)
 								c = 'U';
 							}
 							rw = mbconv((char*)pp, wc);
+							i = 0;
 						}
 						inrange = 0;
 						c = *pp;
@@ -1654,9 +1678,9 @@ bra(Cenv_t* env)
 						if (env->regexp)
 							goto complicated_normal;
 						pp = (unsigned char*)cb[inrange];
-						if ((w = regcollate((char*)env->cursor, (char**)&env->cursor, (char*)pp, COLL_KEY_MAX)) < 0)
+						if ((w = regcollate((char*)env->cursor, (char**)&env->cursor, (char*)pp, COLL_KEY_MAX, NiL)) < 0)
 							goto ecollate;
-						c = buf[0];
+						c = *pp;
 						break;
 					default:
 					complicated_normal:
@@ -1665,6 +1689,7 @@ bra(Cenv_t* env)
 						break;
 					}
 				}
+			singleton:
 				if (inrange == 2)
 				{
 					ce = col(ce, ic, rp, rw, rc, pp, w, c);
@@ -2148,29 +2173,33 @@ grp(Cenv_t* env, int parno)
 				else
 					env->flags &= ~REG_COMMENT;
 				break;
+			case 'X':
+				if (typ >= 0 || env->type == ERE && (env->flags & REG_CLASS_ESCAPE))
+					break; /* PCRE_EXTRA */
+				/*FALLTHROUGH*/
 			case 'A':
-				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT|REG_CLASS_ESCAPE);
+				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT);
 				env->flags |= REG_AUGMENTED|REG_EXTENDED;
 				typ = ARE;
 				break;
 			case 'B':
 			case 'G':
-				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT|REG_CLASS_ESCAPE);
+				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT);
 				typ = BRE;
 				break;
 			case 'E':
-				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT|REG_CLASS_ESCAPE);
+				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT);
 				env->flags |= REG_EXTENDED;
 				typ = ERE;
 				break;
 			case 'F':
 			case 'L':
-				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT|REG_CLASS_ESCAPE);
+				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT);
 				env->flags |= REG_LITERAL;
 				typ = ERE;
 				break;
 			case 'K':
-				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT|REG_CLASS_ESCAPE);
+				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT);
 				env->flags |= REG_AUGMENTED|REG_SHELL|REG_LEFT|REG_RIGHT;
 				typ = KRE;
 				break;
@@ -2184,22 +2213,23 @@ grp(Cenv_t* env, int parno)
 				/* used by caller to disable glob(3) GLOB_STARSTAR */
 				break;
 			case 'P':
-				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT|REG_CLASS_ESCAPE);
+				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT);
 				env->flags |= REG_EXTENDED|REG_CLASS_ESCAPE;
 				typ = ERE;
 				break;
 			case 'S':
-				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT|REG_CLASS_ESCAPE);
+				env->flags &= ~(REG_AUGMENTED|REG_EXTENDED|REG_LITERAL|REG_SHELL|REG_LEFT|REG_RIGHT);
 				env->flags |= REG_SHELL|REG_LEFT|REG_RIGHT;
 				typ = SRE;
 				break;
 			case 'U': /* PCRE_UNGREEDY */
-				if (i)
-					env->flags |= REG_MINIMAL;
-				else
-					env->flags &= ~REG_MINIMAL;
-				break;
-			case 'X': /* PCRE_EXTRA */
+				if (typ >= 0 || env->type == ERE && (env->flags & REG_CLASS_ESCAPE))
+				{
+					if (i)
+						env->flags |= REG_MINIMAL;
+					else
+						env->flags &= ~REG_MINIMAL;
+				}
 				break;
 			default:
 				env->error = REG_BADRPT;
@@ -3250,9 +3280,13 @@ regcomp(regex_t* p, const char* pattern, regflags_t flags)
 	{
 		if (env.flags & REG_SHELL_PATH)
 			env.explicit = env.mappedslash;
+		if (!(env.flags & REG_SHELL_ESCAPED))
+			env.flags |= REG_CLASS_ESCAPE;
 		env.flags |= REG_LENIENT|REG_NULL;
 		env.type = env.type == BRE ? SRE : KRE;
 	}
+	else
+		env.flags &= ~(REG_SHELL_DOT|REG_SHELL_ESCAPED|REG_SHELL_GROUP|REG_SHELL_PATH);
 	if ((env.flags & (REG_NEWLINE|REG_SPAN)) == REG_NEWLINE)
 		env.explicit = env.mappednewline;
 	p->env->leading = (env.flags & REG_SHELL_DOT) ? env.mappeddot : -1;
@@ -3281,43 +3315,34 @@ regcomp(regex_t* p, const char* pattern, regflags_t flags)
 		env.error = REG_EPAREN;
 		goto bad;
 	}
-	p->env->stats.re_flags = env.flags & (REG_EXTENDED|REG_AUGMENTED|REG_SHELL);
-	if (env.flags & REG_LEFT)
+	if ((env.flags & REG_LEFT) && p->env->rex->type != REX_BEG)
 	{
-		if (p->env->rex->type != REX_BEG)
+		if (p->env->rex->type == REX_ALT)
+			env.flags &= ~REG_FIRST;
+		if (!(e = node(&env, REX_BEG, 0, 0, 0)))
 		{
-			if (p->env->rex->type == REX_ALT)
-				env.flags &= ~REG_FIRST;
-			if (!(e = node(&env, REX_BEG, 0, 0, 0)))
-			{
-				regfree(p);
-				return fatal(disc, REG_ESPACE, pattern);
-			}
-			e->next = p->env->rex;
-			p->env->rex = e;
-			p->env->once = 1;
+			regfree(p);
+			return fatal(disc, REG_ESPACE, pattern);
 		}
-		p->env->stats.re_flags |= REG_LEFT;
+		e->next = p->env->rex;
+		p->env->rex = e;
+		p->env->once = 1;
 	}
 	for (e = p->env->rex; e->next; e = e->next);
 	p->env->done.type = REX_DONE;
 	p->env->done.flags = e->flags;
-	if (env.flags & REG_RIGHT)
+	if ((env.flags & REG_RIGHT) && e->type != REX_END)
 	{
-		if (e->type != REX_END)
+		if (p->env->rex->type == REX_ALT)
+			env.flags &= ~REG_FIRST;
+		if (!(f = node(&env, REX_END, 0, 0, 0)))
 		{
-			if (p->env->rex->type == REX_ALT)
-				env.flags &= ~REG_FIRST;
-			if (!(f = node(&env, REX_END, 0, 0, 0)))
-			{
-				regfree(p);
-				return fatal(disc, REG_ESPACE, pattern);
-			}
-			f->flags = e->flags;
-			f->map = e->map;
-			e->next = f;
+			regfree(p);
+			return fatal(disc, REG_ESPACE, pattern);
 		}
-		p->env->stats.re_flags |= REG_RIGHT;
+		f->flags = e->flags;
+		f->map = e->map;
+		e->next = f;
 	}
 	if (stats(&env, p->env->rex))
 	{

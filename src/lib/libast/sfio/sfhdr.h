@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -322,6 +322,9 @@
 
 #if _hdr_wchar && _typ_mbstate_t && _lib_wcrtomb && _lib_mbrtowc
 #define _has_multibyte		1	/* Xopen-compliant	*/
+#if _typ___va_list && !defined(__va_list)
+#define __va_list	va_list
+#endif
 #include	<wchar.h>
 #define SFMBCPY(to,fr)		memcpy((to), (fr), sizeof(mbstate_t))
 #define SFMBCLR(mb)		memset((mb), 0,  sizeof(mbstate_t))
@@ -833,7 +836,11 @@ typedef struct _sfextern_s
 			 ((n) >= SF_GRAIN && (ssize_t)(n) >= (f)->size/16 ) )
 
 /* number of pages to memory map at a time */
-#define SF_NMAP		4
+#if _ptr_bits >= 64
+#define SF_NMAP		1024
+#else
+#define SF_NMAP		32
+#endif
 
 #ifndef MAP_VARIABLE
 #define MAP_VARIABLE	0

@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -25,7 +25,7 @@
  * posix regex error message handler
  */
 
-static const char id[] = "\n@(#)$Id: regex (AT&T Research) 2009-12-11 $\0\n";
+static const char id[] = "\n@(#)$Id: regex (AT&T Research) 2010-09-22 $\0\n";
 
 #include "reglib.h"
 
@@ -69,7 +69,7 @@ regerror(int code, const regex_t* p, char* buf, size_t size)
 		s = (const char*)"unknown error";
 	if (size)
 	{
-		strncpy(buf, s, size);
+		strlcpy(buf, s, size);
 		buf[size - 1] = 0;
 	}
 	else

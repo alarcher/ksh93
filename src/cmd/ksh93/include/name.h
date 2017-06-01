@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -70,6 +70,10 @@ union Value
 #define ARRAY_SETSUB	(64L<<ARRAY_BITS)	/* set subscript */
 #define ARRAY_NOSCOPE	(128L<<ARRAY_BITS)	/* top level scope only */
 #define ARRAY_TREE	(256L<<ARRAY_BITS)	/* arrays of compound vars */
+#if SHOPT_FIXEDARRAY
+#   define ARRAY_FIXED	ARRAY_NOCLONE		/* For index values */
+#endif /* SHOPT_FIXEDARRAY */
+#define NV_FARRAY	0x10000000		/* fixed sized arrays */
 #define NV_ASETSUB	8			/* set subscript */
 
 /* These flags are used as options to array_get() */
@@ -84,6 +88,10 @@ struct Namref
 	Namval_t	*table;
 	Dt_t		*root;
 	char		*sub;
+#if SHOPT_FIXEDARRAY
+	int		curi;
+	char		dim;
+#endif /* SHOPT_FIXEDARRAY */
 };
 
 /* This describes a user shell function node */
@@ -91,6 +99,8 @@ struct Ufunction
 {
 	int		*ptree;		/* address of parse tree */
 	int		lineno;		/* line number of function start */
+	short		argc;		/* number of references */
+	char		**argv;		/* reference argument list */
 	off_t		hoffset;	/* offset into source or history file */
 	Namval_t	*nspace;	/* pointer to name space */
 	char		*fname;		/* file name where function defined */
@@ -119,6 +129,7 @@ struct Ufunction
 #define NV_FUNCTION	(NV_RJUST|NV_FUNCT)	/* value is shell function */
 #define NV_FPOSIX	NV_LJUST		/* posix function semantics */
 #define NV_FTMP		NV_ZFILL		/* function source in tmpfile */
+#define NV_STATICF	NV_INTEGER		/* static class function */
 
 #define NV_NOPRINT	(NV_LTOU|NV_UTOL)	/* do not print */
 #define NV_NOALIAS	(NV_NOPRINT|NV_IMPORT)
@@ -132,7 +143,6 @@ struct Ufunction
 #define BLT_NOSFIO	(NV_IMPORT)		/* doesn't use sfio */
 #define NV_OPTGET	(NV_BINARY)		/* function calls getopts */
 #define nv_isref(n)	(nv_isattr((n),NV_REF|NV_TAGGED|NV_FUNCT)==NV_REF)
-#define nv_istable(n)	(nv_isattr((n),NV_TABLE|NV_LJUST|NV_RJUST|NV_INTEGER)==NV_TABLE)
 #define is_abuiltin(n)	(nv_isattr(n,NV_BLTIN|NV_INTEGER)==NV_BLTIN)
 #define is_afunction(n)	(nv_isattr(n,NV_FUNCTION|NV_REF)==NV_FUNCTION)
 #define	nv_funtree(n)	((n)->nvalue.rp->ptree)
@@ -150,6 +160,10 @@ struct Ufunction
 #define nv_reftree(n)	((n)->nvalue.nrp->root)
 #define nv_reftable(n)	((n)->nvalue.nrp->table)
 #define nv_refsub(n)	((n)->nvalue.nrp->sub)
+#if SHOPT_FIXEDARRAY
+#   define nv_refindex(n)	((n)->nvalue.nrp->curi)
+#   define nv_refdimen(n)	((n)->nvalue.nrp->dim)
+#endif /* SHOPT_FIXEDARRAY */
 
 /* ... etc */
 
@@ -202,6 +216,12 @@ extern void		nv_outnode(Namval_t*,Sfio_t*, int, int);
 extern int		nv_subsaved(Namval_t*);
 extern void		nv_typename(Namval_t*, Sfio_t*);
 extern void		nv_newtype(Namval_t*);
+extern int		nv_istable(Namval_t*);
+extern size_t		nv_datasize(Namval_t*, size_t*);
+extern Namfun_t		*nv_mapchar(Namval_t*, const char*);
+#if SHOPT_FIXEDARRAY
+   extern int		nv_arrfixed(Namval_t*, Sfio_t*, int, char*);
+#endif /* SHOPT_FIXEDARRAY */
 
 extern const Namdisc_t	RESTRICTED_disc;
 extern const Namdisc_t	ENUM_disc;
@@ -221,12 +241,14 @@ extern const char	e_varname[];
 extern const char	e_noalias[];
 extern const char	e_noarray[];
 extern const char	e_notenum[];
+extern const char	e_nounattr[];
 extern const char	e_aliname[];
 extern const char	e_badexport[];
 extern const char	e_badref[];
 extern const char	e_badsubscript[];
 extern const char	e_noref[];
 extern const char	e_selfref[];
+extern const char	e_staticfun[];
 extern const char	e_envmarker[];
 extern const char	e_badlocale[];
 extern const char	e_loop[];
@@ -234,5 +256,11 @@ extern const char	e_redef[];
 extern const char	e_required[];
 extern const char	e_badappend[];
 extern const char	e_unknowntype[];
+extern const char	e_unknownmap[];
+extern const char	e_mapchararg[];
+extern const char	e_subcomvar[];
+extern const char	e_badtypedef[];
 extern const char	e_globalref[];
+extern const char	e_tolower[];
+extern const char	e_toupper[];
 #endif /* _NV_PRIVATE */

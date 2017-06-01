@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -136,4 +136,14 @@ elif	(( $3 != 9 ))
 then	err_exit "child status mismatch -- expected '9', got '$3'"
 fi
 
-exit $((Errors))
+trap '' CHLD
+integer d
+for ((d=0; d < 2000; d++))
+do      if      print foo | grep bar
+        then    break 
+        fi
+done
+(( d==2000 )) ||  err_exit "trap '' CHLD  causes side effects d=$d"
+trap - CHLD
+
+exit $((Errors<125?Errors:125))

@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -76,12 +76,28 @@ fixup(Lc_info_t* li, register char** b)
 					TM_TIME,
 					TM_DATE,
 					TM_DEFAULT,
+					TM_MERIDIAN,
+					TM_UT,
+					TM_DT,
+					TM_SUFFIXES,
+					TM_PARTS,
+					TM_HOURS,
+					TM_DAYS,
+					TM_LAST,
+					TM_THIS,
+					TM_NEXT,
+					TM_EXACT,
+					TM_NOISE,
+					TM_ORDINAL,
 					TM_CTIME,
 					TM_DATE_1,
 					TM_INTERNATIONAL,
 					TM_RECENT,
 					TM_DISTANT,
 					TM_MERIDIAN_TIME,
+					TM_ORDINALS,
+					TM_FINAL,
+					TM_WORK,
 	};
 
 	standardized(li, b);
@@ -558,7 +574,7 @@ load(Lc_info_t* li)
 	tm_info.format = tm_data.format;
 	if (!(tm_info.deformat = state.format))
 		tm_info.deformat = tm_info.format[TM_DEFAULT];
-	if (mcfind(path, NiL, NiL, LC_TIME, 0) && (sp = sfopen(NiL, path, "r")))
+	if (mcfind(NiL, NiL, LC_TIME, 0, path, sizeof(path)) && (sp = sfopen(NiL, path, "r")))
 	{
 		n = sfsize(sp);
 		tp = 0;

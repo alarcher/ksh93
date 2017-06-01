@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#                     Copyright (c) 1994-2010 AT&T                     #
+#                     Copyright (c) 1994-2011 AT&T                     #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                               by AT&T                                #
@@ -30,7 +30,7 @@ case $-:$BASH_VERSION in
 esac
 
 command=iffe
-version=2009-12-04 # update in USAGE too #
+version=2011-01-07 # update in USAGE too #
 
 compile() # $cc ...
 {
@@ -80,8 +80,13 @@ is_hdr() # [ - ] [ file.c ] hdr
 		;;
 	esac
 	case $_is_hdr_status in
-	0)	success $_is_hdr_flag ;;
-	*)	failure $_is_hdr_flag ;;
+	0)	success $_is_hdr_flag
+		;;
+	*)	case $debug in
+		3)	cat $tmp.e >&$stderr ;;
+		esac
+		failure $_is_hdr_flag
+		;;
 	esac
 	return $_is_hdr_status
 }
@@ -518,6 +523,7 @@ exclude()
 }
 
 all=0
+apis=
 binding="-dy -dn -Bdynamic -Bstatic -Wl,-ashared -Wl,-aarchive -call_shared -non_shared '' -static"
 complete=0
 config=0
@@ -621,6 +627,7 @@ case $tmp in
 esac
 undef=0
 verbose=0
+vers=
 
 # options -- `-' for output to stdout otherwise usage
 
@@ -632,7 +639,7 @@ set=
 case `(getopts '[-][123:xyz]' opt --xyz; echo 0$opt) 2>/dev/null` in
 0123)	USAGE=$'
 [-?
-@(#)$Id: iffe (AT&T Research) 2009-12-04 $
+@(#)$Id: iffe (AT&T Research) 2011-01-07 $
 ]
 '$USAGE_LICENSE$'
 [+NAME?iffe - C compilation environment feature probe]
@@ -803,6 +810,11 @@ case `(getopts '[-][123:xyz]' opt --xyz; echo 0$opt) 2>/dev/null` in
 	happy.]
 [+?The feature tests are:]{
 	[+# \acomment\a?Comment line - ignored.]
+	[+api \aname\a \aYYYYMMDD\a \asymbol ...\a?Emit api compatibility tests
+		for \aname\a and \b#define\b \asymbol\a \asymbol\a_\aYYYYMMDD\a
+		when \aNAME\a_API is >= \aYYYYMMDD\a (\aNAME\a is \aname\a
+		converted to upper case.) If \aNAME\a_API is not defined
+		then \asymbol\a maps to the newest \aYYYYMMDD\a for \aname\a.]
 	[+define \aname\a [ (\aarg,...\a) ]] [ \avalue\a ]]?Emit a macro
 		\b#define\b for \aname\a if it is not already defined. The
 		definition is passed to subsequent tests.]
@@ -815,6 +827,8 @@ case `(getopts '[-][123:xyz]' opt --xyz; echo 0$opt) 2>/dev/null` in
 		to subsequent tests.]
 	[+reference \aheader\a?If \aheader\a exists then add \b#include\b
 		\aheader\a to subsequent tests.]
+	[+ver \aname\a \aYYYYMMDD\a?\b#define\b \aNAME\a_VERSION \aYYYYMMDD\a
+		\aNAME\a is \aname\a converted to upper case.)]
 	[+cmd \aname\a?Defines \b_cmd_\b\aname\a if \aname\a is an executable
 		in one of the standard system directories (\b/bin, /etc,
 		/usr/bin, /usr/etc, /usr/ucb\b).
@@ -1719,7 +1733,7 @@ do	case $in in
 			;;
 		esac
 		;;
-	define|extern|header|include|print|reference)
+	api|define|extern|header|include|print|reference|ver)
 		op=$1
 		shift
 		arg=
@@ -2164,6 +2178,65 @@ $lin
 
 	case $arg in
 	'')	case $op in
+		api)	arg=-
+			case $1:$2 in
+			[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ]*:[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9])
+				a=$1
+				shift
+				case " $apis " in
+				*" $a "*)
+					;;
+				*)	apis="$apis $a"
+					eval api_sym_${a}= api_ver_${a}=
+					;;
+				esac
+				rel=
+				while	:
+				do	case $# in
+					0)	break ;;
+					esac
+					case $1 in
+					[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9])
+						rel="$rel $1"
+						;;
+					*)	break
+						;;
+					esac
+					shift
+				done
+				while	:
+				do	case $# in
+					0)	break ;;
+					esac
+					case $1 in
+					:)	break ;;
+					esac
+					eval syms='$'api_sym_${a}
+					case $syms in
+					'')	sep='' ;;
+					*)	sep=$nl ;;
+					esac
+					for r in $rel
+					do	syms=$syms$sep${1}:${r}
+						sep=$nl
+					done
+					eval api_sym_${a}='$'syms
+					shift
+				done
+				;;
+			*)	echo "$command: $op: expected: name YYYYMMDD symbol ..." >&$stderr
+				;;
+			esac
+			while	:
+			do	case $# in
+				0)	break ;;
+				esac
+				case $1 in
+				:)	break ;;
+				esac
+				shift
+			done
+			;;
 		iff|ini)arg=-
 			;;
 		comment)cat <<!
@@ -2360,6 +2433,25 @@ $*
 !
 			usr="$usr${nl}$v"
 			continue
+			;;
+		ver)	arg=-
+			case $1:$2 in
+			[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ]*:[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9])
+				vers="$vers$nl$1"
+				eval ver_$1=$2
+				;;
+			*)	echo "$command: $op: expected: name YYYYMMDD" >&$stderr
+				;;
+			esac
+			while	:
+			do	case $# in
+				0)	break ;;
+				esac
+				case $1 in
+				:)	break ;;
+				esac
+				shift
+			done
 			;;
 		esac
 		;;
@@ -2858,37 +2950,89 @@ $*
 					$a|$c)	;;
 					*)	case $cur in
 						.)	;;
-						-)	case $iff in
+						*)	case $vers in
+							?*)	echo
+								for api in $vers
+								do	API=`echo $api | tr abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ`
+									eval ver='${'ver_${api}'}'
+									echo "#define ${API}_VERSION	${ver}"
+								done
+							esac
+							case $apis in
+							?*)	for api in $apis
+								do	map=
+									sep=
+									eval syms='"${'api_sym_${api}'}"'
+									# old solaris requires -k<space><junk> #
+									set x x `echo "$syms" | sort -t: -u -k 1,1 -k 2,2nr | sed 's/\(.*\):\(.*\)/\1 \2/'`
+									sym=
+									while	:
+									do	shift 2
+										case $# in
+										[01])	break ;;
+										esac
+										prv=$sym
+										sym=$1
+										rel=$2
+										case $prv in
+										$sym)	echo "#elif _API_${api} >= $rel"
+											;;
+										*)	case $prv in
+											'')	echo
+												echo "#if !defined(_API_${api}) && defined(_API_DEFAULT)"
+												echo "#define _API_${api}	_API_DEFAULT"
+												echo "#endif"
+												;;
+											*)	echo "#endif"
+												;;
+											esac
+											echo
+											echo "#if ( _BLD_${api} || !_API_${api} || _API_${api} >= $rel )"
+											;;
+										esac
+										echo "#undef	${sym}"
+										echo "#define ${sym}	${sym}_${rel}"
+										map=$map$sep${sym}_${rel}
+										sep=' '
+									done
+									echo "#endif"
+									echo
+									echo "#define _API_${api}_MAP	\"$map\""
+								done
+								echo
+								;;
+							esac
+							case $iff in
 							?*)	echo "#endif" ;;
 							esac
-							;;
-						*)	case $iff in
-							?*)	echo "#endif" ;;
-							esac
-							exec >/dev/null
 							case $cur in
-							*[\\/]*|*.h)	x=$cur ;;
-							*)		x=$dir/$cur ;;
-							esac
-							case $define in
-							n)	sed '/^#/d' $tmp.h > $tmp.c
-								sed '/^#/d' $x > $tmp.t
-								;;
-							*)	(proto -r $protoflags $tmp.h) >/dev/null 2>&1
-								sed 's,/\*[^/]*\*/, ,g' $tmp.h > $tmp.c
-								sed 's,/\*[^/]*\*/, ,g' $x > $tmp.t
-								;;
-							esac
-							if	cmp -s $tmp.c $tmp.t
-							then	rm -f $tmp.h
-								case $verbose in
-								1)	echo "$command: $x: unchanged" >&$stderr ;;
+							-)	;;
+							*)	exec >/dev/null
+								case $cur in
+								*[\\/]*|*.h)	x=$cur ;;
+								*)		x=$dir/$cur ;;
 								esac
-							else	case $x in
-								${dir}[\\/]$cur)	test -d $dir || mkdir $dir || exit 1 ;;
+								case $define in
+								n)	sed '/^#/d' $tmp.h > $tmp.c
+									sed '/^#/d' $x > $tmp.t
+									;;
+								*)	(proto -r $protoflags $tmp.h) >/dev/null 2>&1
+									sed 's,/\*[^/]*\*/, ,g' $tmp.h > $tmp.c
+									sed 's,/\*[^/]*\*/, ,g' $x > $tmp.t
+									;;
 								esac
-								mv $tmp.h $x
-							fi
+								if	cmp -s $tmp.c $tmp.t
+								then	rm -f $tmp.h
+									case $verbose in
+									1)	echo "$command: $x: unchanged" >&$stderr ;;
+									esac
+								else	case $x in
+									${dir}[\\/]$cur)	test -d $dir || mkdir $dir || exit 1 ;;
+									esac
+									mv $tmp.h $x
+								fi
+								;;
+							esac
 							;;
 						esac
 						case $out in
@@ -3339,7 +3483,7 @@ int main(){printf("hello");return(0);}
 "
 								rm -f $tmp.exe
 								if	compile $cc -c $tmp.c <&$nullin >&$nullout &&
-									compile $cc -o $tmp.exe $tmp.o <&$nullin >&$nullout 2>$tmp.e &&
+									compile $cc -o $tmp.exe $tmp.o <&$nullin >&$nullout &&
 									$executable $tmp.exe
 								then	e=`wc -l $tmp.e`
 									eval set x x $binding
@@ -3350,14 +3494,14 @@ int main(){printf("hello");return(0);}
 										0)	break ;;
 										esac
 										rm -f $tmp.exe
-										compile $cc -o $tmp.exe $1 $tmp.o <&$nullin >&$nullout 2>$tmp.e && $executable $tmp.exe || continue
+										compile $cc -o $tmp.exe $1 $tmp.o <&$nullin >&$nullout && $executable $tmp.exe || continue
 										case `wc -l $tmp.e` in
 										$e)	;;
 										*)	continue ;;
 										esac
 										d=`ls -s $tmp.exe`
 										rm -f $tmp.exe
-										compile $cc -o $tmp.exe $2 $tmp.o <&$nullin >&$nullout 2>$tmp.e && $executable $tmp.exe || continue
+										compile $cc -o $tmp.exe $2 $tmp.o <&$nullin >&$nullout && $executable $tmp.exe || continue
 										case `wc -l $tmp.e` in
 										$e)	;;
 										*)	continue ;;
@@ -3384,6 +3528,7 @@ int main(){printf("hello");return(0);}
 				# builtin tests
 
 				case $o in
+				api)	;;
 				cmd)	case $p in
 					?*)	continue ;;
 					esac
@@ -3678,6 +3823,7 @@ $inc
 $tst
 $ext
 $allinc
+$inc
 #include <$x>" > $tmp.c
 							if	is_hdr $x
 							then	gothdr="$gothdr + $x"
@@ -4292,6 +4438,7 @@ struct xxx* f() { return &v; }"
 					*)	echo $arg=\"$val\" ;;
 					esac
 					;;
+				ver)	;;
 				0)	result=FAILURE
 					;;
 				1)	result=SUCCESS

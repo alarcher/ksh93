@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -551,7 +551,7 @@ function foo.set
 		fi
 		;;
 	barrier_hit)
-		if	[[ ${.sh.value} = yes ]]
+		if	[[ ${.sh.value} == yes ]]
 		then	foo[barrier_not_hit]=no
 		else	foo[barrier_not_hit]=yes
 		fi
@@ -656,4 +656,8 @@ eval $v=C
 cmd='set --nounset; unset foo; : ${!foo*}'
 $SHELL -c "$cmd" 2>/dev/null || err_exit "'$cmd' exit status $?, expected 0"
 
-exit $((Errors))
+SHLVL=1
+level=$($SHELL -c $'$SHELL -c \'print -r "$SHLVL"\'')
+[[ $level  == 3 ]]  || err_exit "SHLVL should be 3 not $level"
+
+exit $((Errors<125?Errors:125))

@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -123,17 +123,17 @@ static void	trap_timeout(void* handle)
 	tp->flags |= L_FLAG;
 	tp->sh->sigflag[SIGALRM] |= SH_SIGALRM;
 	if(sh_isstate(SH_TTYWAIT))
-		sh_timetraps();
+		sh_timetraps(tp->sh);
 }
 
-void	sh_timetraps(void)
+void	sh_timetraps(Shell_t *shp)
 {
 	register struct tevent *tp, *tpnext;
 	register struct tevent *tptop;
 	while(1)
 	{
-		sh.sigflag[SIGALRM] &= ~SH_SIGALRM;
-		tptop= (struct tevent*)sh.st.timetrap;
+		shp->sigflag[SIGALRM] &= ~SH_SIGALRM;
+		tptop= (struct tevent*)shp->st.timetrap;
 		for(tp=tptop;tp;tp=tpnext)
 		{
 			tpnext = tp->next;
@@ -150,7 +150,7 @@ void	sh_timetraps(void)
 				}
 			}
 		}
-		if(!(sh.sigflag[SIGALRM]&SH_SIGALRM))
+		if(!(shp->sigflag[SIGALRM]&SH_SIGALRM))
 			break;
 	}
 }
@@ -182,8 +182,9 @@ static char *setdisc(Namval_t *np, const char *event, Namval_t* action, Namfun_t
  */
 static void putval(Namval_t* np, const char* val, int flag, Namfun_t* fp)
 {
-	register struct tevent *tp;
+	register struct tevent	*tp = (struct tevent*)fp;
 	register double d;
+	Shell_t		*shp = tp->sh;
 	if(val)
 	{
 		double now;
@@ -196,24 +197,23 @@ static void putval(Namval_t* np, const char* val, int flag, Namfun_t* fp)
 #endif /* timeofday */
 		nv_putv(np,val,flag,fp);
 		d = nv_getnum(np);
-		tp = (struct tevent*)fp;
 		if(*val=='+')
 		{
 			double x = d + now;
-			nv_putv(np,(char*)&x,NV_INTEGER,fp);
+			nv_putv(np,(char*)&x,NV_INTEGER|NV_DOUBLE,fp);
 		}
 		else
 			d -= now;
 		tp->milli = 1000*(d+.0005);
 		if(tp->timeout)
-			sh.st.timetrap = time_delete(tp,sh.st.timetrap);
+			shp->st.timetrap = time_delete(tp,shp->st.timetrap);
 		if(tp->milli > 0)
-			sh.st.timetrap = time_add(tp,sh.st.timetrap);
+			shp->st.timetrap = time_add(tp,shp->st.timetrap);
 	}
 	else
 	{
 		tp = (struct tevent*)nv_stack(np, (Namfun_t*)0);
-		sh.st.timetrap = time_delete(tp,sh.st.timetrap);
+		shp->st.timetrap = time_delete(tp,shp->st.timetrap);
 		if(tp->action)
 			nv_close(tp->action);
 		nv_unset(np);

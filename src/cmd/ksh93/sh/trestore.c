@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -107,7 +107,7 @@ static Shnode_t *r_tree(Shell_t *shp)
 			t->ar.arexpr = r_arg(shp);
 			t->ar.arcomp = 0;
 			if((t->ar.arexpr)->argflag&ARG_RAW)
-				 t->ar.arcomp = sh_arithcomp((t->ar.arexpr)->argval);
+				 t->ar.arcomp = sh_arithcomp(shp,(t->ar.arexpr)->argval);
 			break;
 		case TFOR:
 			t = getnode(shp->stk,fornod);
@@ -152,9 +152,9 @@ static Shnode_t *r_tree(Shell_t *shp)
 				fp->functnam = stkcopy(shp->stk,shp->st.filename);
 			t->funct.functtre = r_tree(shp); 
 			t->funct.functstak = slp;
+			t->funct.functargs = (struct comnod*)r_tree(shp);
 			slp->slptr =  stakinstall(savstak,0);
 			slp->slchild = shp->st.staklist;
-			t->funct.functargs = (struct comnod*)r_tree(shp);
 			break;
 		}
 		case TTST:
@@ -194,10 +194,11 @@ static struct argnod *r_arg(Shell_t *shp)
 		ap->argval[l] = 0;
 		ap->argchn.cp = 0;
 		ap->argflag = sfgetc(infile);
+#if 0
 		if((ap->argflag&ARG_MESSAGE) && *ap->argval)
 		{
 			/* replace international messages */
-			ap = sh_endword(shp,1);
+			sh_endword(shp,1);
 			ap->argflag &= ~ARG_MESSAGE;
 			if(!(ap->argflag&(ARG_MAC|ARG_EXP)))
 				ap = sh_endword(shp,0);
@@ -209,6 +210,7 @@ static struct argnod *r_arg(Shell_t *shp)
 			}
 		}
 		else
+#endif
 			ap = (struct argnod*)stkfreeze(stkp,0);
 		if(*ap->argval==0 && (ap->argflag&~(ARG_APPEND|ARG_MESSAGE|ARG_QUOTED))==0)
 		{

@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -98,8 +98,9 @@ static void _sfcleanup()
 			f->mode &= ~SF_POOL;
 			if((f->flags&SF_WRITE) && !(f->mode&SF_WRITE))
 				(void)_sfmode(f,SF_WRITE,1);
-			if(((f->bits&SF_MMAP) && f->data) ||
-			   ((f->mode&SF_WRITE) && f->next == f->data) )
+			if(f->data &&
+			   ((f->bits&SF_MMAP) ||
+			    ((f->mode&SF_WRITE) && f->next == f->data) ) )
 				(void)SFSETBUF(f,NIL(Void_t*),0);
 			f->mode |= pool;
 

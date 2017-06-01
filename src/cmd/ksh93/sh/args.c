@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -203,7 +203,7 @@ int sh_argopts(int argc,register char *argv[], void *context)
 			break;
 #if SHOPT_BASH
 		    case -1:	/* --rcfile */
-			ap->sh->rcfile = opt_info.arg;
+			ap->sh->gd->rcfile = opt_info.arg;
 			continue;
 		    case -2:	/* --noediting */
 			if (!f)
@@ -321,7 +321,7 @@ int sh_argopts(int argc,register char *argv[], void *context)
 		trace = 0;
 	}
 	if(trace)
-		sh_trace(argv,1);
+		sh_trace(shp,argv,1);
 	argc -= opt_info.index;
 	argv += opt_info.index;
 	if(action==PRINT)
@@ -389,21 +389,21 @@ void sh_applyopts(Shell_t* shp,Shopt_t newflags)
 		off_option(&newflags,SH_NOEXEC);
 	if(is_option(&newflags,SH_PRIVILEGED))
 		on_option(&newflags,SH_NOUSRPROFILE);
-	if(!sh_isstate(SH_INIT) && is_option(&newflags,SH_PRIVILEGED) != sh_isoption(SH_PRIVILEGED) || sh_isstate(SH_INIT) && is_option(&((Arg_t*)shp->arg_context)->sh->offoptions,SH_PRIVILEGED) && shp->userid!=shp->euserid)
+	if(!sh_isstate(SH_INIT) && is_option(&newflags,SH_PRIVILEGED) != sh_isoption(SH_PRIVILEGED) || sh_isstate(SH_INIT) && is_option(&((Arg_t*)shp->arg_context)->sh->offoptions,SH_PRIVILEGED) && shp->gd->userid!=shp->gd->euserid)
 	{
 		if(!is_option(&newflags,SH_PRIVILEGED))
 		{
-			setuid(shp->userid);
-			setgid(shp->groupid);
-			if(shp->euserid==0)
+			setuid(shp->gd->userid);
+			setgid(shp->gd->groupid);
+			if(shp->gd->euserid==0)
 			{
-				shp->euserid = shp->userid;
-				shp->egroupid = shp->groupid;
+				shp->gd->euserid = shp->gd->userid;
+				shp->gd->egroupid = shp->gd->groupid;
 			}
 		}
-		else if((shp->userid!=shp->euserid && setuid(shp->euserid)<0) ||
-			(shp->groupid!=shp->egroupid && setgid(shp->egroupid)<0) ||
-			(shp->userid==shp->euserid && shp->groupid==shp->egroupid))
+		else if((shp->gd->userid!=shp->gd->euserid && setuid(shp->gd->euserid)<0) ||
+			(shp->gd->groupid!=shp->gd->egroupid && setgid(shp->gd->egroupid)<0) ||
+			(shp->gd->userid==shp->gd->euserid && shp->gd->groupid==shp->gd->egroupid))
 				off_option(&newflags,SH_PRIVILEGED);
 	}
 #if SHOPT_BASH
@@ -781,13 +781,14 @@ char **sh_argbuild(Shell_t *shp,int *nargs, const struct comnod *comptr,int flag
  */
 static int	arg_pipe(register int pv[])
 {
+	Shell_t *shp = sh_getinterp();
 	int fd[2];
 	if(pipe(fd)<0 || (pv[0]=fd[0])<0 || (pv[1]=fd[1])<0)
 		errormsg(SH_DICT,ERROR_system(1),e_pipe);
 	pv[0] = sh_iomovefd(pv[0]);
 	pv[1] = sh_iomovefd(pv[1]);
-	sh.fdstatus[pv[0]] = IONOSEEK|IOREAD;
-	sh.fdstatus[pv[1]] = IONOSEEK|IOWRITE;
+	shp->fdstatus[pv[0]] = IONOSEEK|IOREAD;
+	shp->fdstatus[pv[1]] = IONOSEEK|IOWRITE;
 	sh_subsavefd(pv[0]);
 	sh_subsavefd(pv[1]);
 	return(0);
@@ -798,14 +799,17 @@ struct argnod *sh_argprocsub(Shell_t *shp,struct argnod *argp)
 {
 	/* argument of the form <(cmd) or >(cmd) */
 	register struct argnod *ap;
-	int monitor, fd, pv[2];
+	int monitor, fd, pv[3];
 	int subshell = shp->subshell;
 	ap = (struct argnod*)stkseek(shp->stk,ARGVAL);
 	ap->argflag |= ARG_MAKE;
 	ap->argflag &= ~ARG_RAW;
 	sfwrite(shp->stk,e_devfdNN,8);
+	pv[2] = 0;
 	sh_pipe(pv);
 	fd = argp->argflag&ARG_RAW;
+	if(fd==0 && shp->subshell)
+		sh_subtmpfile(shp);
 	sfputr(shp->stk,fmtbase((long)pv[fd],10,0),0);
 	ap = (struct argnod*)stkfreeze(shp->stk,0);
 	shp->inpipe = shp->outpipe = 0;

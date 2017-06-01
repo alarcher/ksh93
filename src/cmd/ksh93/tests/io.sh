@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -40,7 +40,7 @@ function fun
 	done 2>   /dev/null
 	print -u3 good
 }
-print 'read -r a;print -r -u$1 -- "$a"' > $tmp/mycat
+print 'read -r a; print -r -u$1 -- "$a"' > $tmp/mycat
 chmod 755 $tmp/mycat
 for ((i=3; i < 10; i++))
 do
@@ -75,7 +75,7 @@ FDFS=(
 	( dir=/dev/fd		semantics='dup'	)
 )
 for ((fdfs=0; fdfs<${#FDFS[@]}-1; fdfs++))
-do	[[ -e ${FDFS[fdfs].dir} ]] && { command : > ${FDFS[fdfs].dir}/1; } 2>/dev/null && break
+do	[[ -e ${FDFS[fdfs].dir} ]] && { command : > ${FDFS[fdfs].dir}/1; } 2>/dev/null >&2 && break
 done
 
 exec 3<> file1
@@ -160,9 +160,9 @@ then	err_exit 'file descriptor not restored after exec in subshell'
 fi
 exec 3>&- 4>&-
 [[ $( {
-	read -r line;print -r -- "$line"
+	read -r line; print -r -- "$line"
 	(
-	        read -r line;print -r -- "$line"
+	        read -r line; print -r -- "$line"
 	) & wait
 	while	read -r line
         do	print -r -- "$line"
@@ -178,7 +178,7 @@ cat > $tmp/1 <<- ++EOF++
 	trap "rm -f \$script" EXIT
 	exec 9> \$script
 	for ((i=3; i<9; i++))
-	do	eval "while read -u\$i; do : ;done \$i</dev/null"
+	do	eval "while read -u\$i; do : ; done \$i</dev/null"
 		print -u9 "exec \$i< /dev/null"
 	done
 	for ((i=0; i < 60; i++))
@@ -207,7 +207,7 @@ print > /dev/null {n}> $tmp/1
 if	[[ $newio && $(print hello | while read -u$n; do print $REPLY; done {n}<&0) != hello ]]
 then	err_exit "{n}<&0 not working with for loop"
 fi
-[[ $({ read -r;read -u3 3<&0; print -- "$REPLY" ;} <<!
+[[ $({ read -r; read -u3 3<&0; print -- "$REPLY" ;} <<!
 hello
 world
 !) == world ]] || err_exit 'I/O not synchronized with <&'
@@ -245,7 +245,7 @@ then	(( $(3<#) == 0 )) || err_exit "not at position 0"
 	command exec 3<# *jjjj*
 	read -u3
 	[[  $REPLY == {39}(j) ]] || err_exit "<# pattern failed"
-	[[ $(command exec 3<## *llll*) = {39}(k) ]] || err_exit "<## pattern not saving standard output"
+	[[ $(command exec 3<## *llll*) == {39}(k) ]] || err_exit "<## pattern not saving standard output"
 	read -u3
 	[[  $REPLY == {39}(l) ]] || err_exit "<## pattern failed to position"
 	command exec 3<# *abc*
@@ -332,27 +332,38 @@ read -n3 a <<!
 abcdefg
 !
 [[ $a == abc ]] || err_exit 'read -n3 here-document not working'
-(print -n a;sleep 1; print -n bcde) | { read -N3 a; read -N1 b;}
+(print -n a; sleep 1; print -n bcde) | { read -N3 a; read -N1 b;}
 [[ $a == abc ]] || err_exit 'read -N3 from pipe not working'
 [[ $b == d ]] || err_exit 'read -N1 from pipe not working'
-(print -n a;sleep 1; print -n bcde) |read -n3 a
+(print -n a; sleep 1; print -n bcde) |read -n3 a
 [[ $a == a ]] || err_exit 'read -n3 from pipe not working'
 if	mkfifo $tmp/fifo 2> /dev/null
-then	(print -n a; sleep 1;print -n bcde)  > $tmp/fifo &
+then	(print -n a; sleep 2; print -n bcde) > $tmp/fifo &
 	{
-	read -u5 -n3  -t2 a  || err_exit 'read -n3 from fifo timedout'
-	read -u5 -n1 -t2 b || err_exit 'read -n1 from fifo timedout'
+	read -u5 -n3 -t3 a || err_exit 'read -n3 from fifo timed out'
+	read -u5 -n1 -t3 b || err_exit 'read -n1 from fifo timed out'
 	} 5< $tmp/fifo
-	[[ $a == a ]] || err_exit 'read -n3 from fifo not working'
+	exp=a
+	got=$a
+	[[ $got == "$exp" ]] || err_exit "read -n3 from fifo failed -- expected '$exp', got '$got'"
+	exp=b
+	got=$b
+	[[ $got == "$exp" ]] || err_exit "read -n1 from fifo failed -- expected '$exp', got '$got'"
 	rm -f $tmp/fifo
+	wait
 	mkfifo $tmp/fifo 2> /dev/null
-	(print -n a; sleep 1;print -n bcde)  > $tmp/fifo &
+	(print -n a; sleep 2; print -n bcde) > $tmp/fifo &
 	{
-	read -u5 -N3 -t2 a || err_exit 'read -N3 from fifo timed out'
-	read -u5 -N1 -t2 b || err_exit 'read -N1 from fifo timedout'
+	read -u5 -N3 -t3 a || err_exit 'read -N3 from fifo timed out'
+	read -u5 -N1 -t3 b || err_exit 'read -N1 from fifo timed out'
 	} 5< $tmp/fifo
-	[[ $a == abc ]] || err_exit 'read -N3 from fifo not working'
-	[[ $b == d ]] || err_exit 'read -N1 from fifo not working'
+	exp=abc
+	got=$a
+	[[ $got == "$exp" ]] || err_exit "read -N3 from fifo failed -- expected '$exp', got '$got'"
+	exp=d
+	got=$b
+	[[ $got == "$exp" ]] || err_exit "read -N1 from fifo failed -- expected '$exp', got '$got'"
+	wait
 fi
 (
 	print -n 'prompt1: '
@@ -373,8 +384,8 @@ fi
 [[ $line3 == 'prompt2: ' ]]	|| err_exit "line3 should be 'prompt2: '"
 [[ ! $line4 ]]			|| err_exit "line4 should be empty"
 
-if	$SHELL -c "export LC_ALL=en_US.UTF-8; c=$'\342\202\254'; [[ \${#c} == 1 ]]" 2>/dev/null
-then	lc_utf8=en_US.UTF-8
+if	$SHELL -c "export LC_ALL=C.UTF-8; c=$'\342\202\254'; [[ \${#c} == 1 ]]" 2>/dev/null
+then	lc_utf8=C.UTF-8
 else	lc_utf8=''
 fi
 
@@ -400,7 +411,7 @@ do	a=$1
 done
 
 if	[[ $lc_utf8 ]]
-then	export LC_ALL=en_US.UTF-8
+then	export LC_ALL=$lc_utf8
 	typeset -a c=( '' 'A' $'\303\274' $'\342\202\254' )
 	integer i w
 	typeset o
@@ -448,4 +459,7 @@ exp=$':2:printf :1:A:\n:2::\n:2:print\n:2:print :1:Z:'
 got=$(<$tmp/22.out)
 [[ $exp == "$got" ]] || err_exit "standard error garbled -- expected $(printf %q "$exp"), got $(printf %q "$got")"
 
-exit $((Errors))
+$SHELL 2> /dev/null -c 'exec 3<&1 ; exec 1<&- ; exec > outfile;print foobar' || error_exit 'exec 1<&- causes failure'
+[[ $(<outfile) == foobar ]] || err_exit 'outfile does not contain foobar'
+
+exit $((Errors<125?Errors:125))

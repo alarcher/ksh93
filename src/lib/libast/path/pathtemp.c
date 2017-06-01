@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -297,7 +297,7 @@ pathtemp(char* buf, size_t len, const char* dir, const char* pfx, int* fdp)
 			 */
 
 			tmp.pid = getpid();
-			tmp.rng = (uint32_t)tmp.pid * ((uint32_t)time(NiL) ^ (((uint32_t)(&attempt)) >> 3) ^ (((uint32_t)tmp.dir) >> 3));
+			tmp.rng = (uint32_t)tmp.pid * ((uint32_t)time(NiL) ^ (((uint32_t)integralof(&attempt)) >> 3) ^ (((uint32_t)integralof(tmp.dir)) >> 3));
 			if (!tmp.key)
 				tmp.key = (tmp.rng >> 16) | ((tmp.rng & 0xffff) << 16);
 			tmp.rng ^= tmp.key;

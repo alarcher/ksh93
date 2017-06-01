@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -36,6 +36,8 @@ if	[[ -d /cygdrive ]]
 then	err_exit cygwin detected - coprocess tests disabled - enable at the risk of wedging your system
 	exit $((Errors))
 fi
+
+bintrue=$(whence -p true)
 
 function ping # id
 {
@@ -207,8 +209,9 @@ builtin cat
 cat |&
 pid=$!
 exec 5<&p 6>&p
-print -u6 hi; read -u5
-[[ $REPLY == hi ]] || err_exit 'REPLY is $REPLY not hi'
+exp=hi
+print -u6 $exp; read -u5
+[[ $REPLY == "$exp" ]] || err_exit "REPLY failed -- expected '$exp', got '$REPLY'"
 exec 6>&-
 wait $pid
 trap - TERM
@@ -310,4 +313,38 @@ kill $pid 2>/dev/null
 wait
 )
 
-exit $((Errors))
+function mypipe
+{
+	read; read
+	print -r -- "$REPLY"
+}
+
+mypipe |&
+print -p "hello"
+z="$( $bintrue $($bintrue) )"
+{ print -p "world";} 2> /dev/null
+read -p
+[[ $REPLY == world ]] ||  err_exit "expected 'world' got '$REPLY'"
+kill $pid 2>/dev/null
+wait
+
+
+function cop
+{
+        read
+        print ok
+}
+exp=ok
+cop |&
+pid=$!
+(
+if      print -p yo 2>/dev/null
+then    read -p got
+else    got='no coprocess'
+fi
+[[ $got == $exp ]] || err_exit "main coprocess subshell query failed -- expected $exp, got '$got'"
+)
+kill $pid 2>/dev/null
+wait
+
+exit $((Errors<125?Errors:125))

@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -159,7 +159,8 @@ static void put_enum(Namval_t* np,const char *val,int flags,Namfun_t *fp)
 		}
 		i++;
 	}
-	error(ERROR_exit(1), "%s:  invalid value %s",nv_name(np),val);
+	if(nv_isattr(np,NV_NOFREE))
+		error(ERROR_exit(1), "%s:  invalid value %s",nv_name(np),val);
 }
 
 static char* get_enum(register Namval_t* np, Namfun_t *fp)

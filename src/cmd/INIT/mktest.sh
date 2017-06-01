@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#                     Copyright (c) 1994-2010 AT&T                     #
+#                     Copyright (c) 1994-2011 AT&T                     #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                               by AT&T                                #
@@ -32,7 +32,7 @@ case $(getopts '[-][123:xyz]' opt --xyz 2>/dev/null; echo 0$opt) in
 0123)	ARGV0="-a $command"
 	USAGE=$'
 [-?
-@(#)$Id: mktest (AT&T Labs Research) 2009-11-30 $
+@(#)$Id: mktest (AT&T Labs Research) 2010-08-11 $
 ]
 '$USAGE_LICENSE$'
 [+NAME?mktest - generate a regression test scripts]
@@ -62,6 +62,8 @@ unit.rt [ unit [ arg ... ] ]
             input.]
         [+DIAGNOSTICS?Diagnostic messages of unspecified format are
 	    expected.]
+        [+DO \acommand\a [ \aarg\a ... ]]?Execute \acommand\a if the
+	    current test is active.]
         [+EXEC [ \aarg\a ... ]]?Run the command under test with
             optional arguments. If the standard input is not specified then
             the standard input of the previous EXEC is used. The standard
@@ -453,6 +455,12 @@ function RUN
 		fi
 		;;
 	esac
+}
+
+function DO
+{
+	LINE
+	print -r $'\t'DO "$@"
 }
 
 function EXEC

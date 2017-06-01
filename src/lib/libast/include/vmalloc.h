@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -52,6 +52,7 @@ struct _vmstat_s
 	size_t	m_free;			/* largest free piece		*/
 	int	n_seg;			/* number of segments		*/
 	size_t	extent;			/* total size of region		*/
+	int	mode;			/* region mode bits		*/
 };
 
 struct _vmdisc_s
@@ -226,6 +227,8 @@ _END_EXTERNS_
 #define vmresize(vm,d,sz,type)	(_VMFL_(vm), \
 				 (*(_VM_(vm)->meth.resizef))\
 					((vm),(Void_t*)(d),(sz),(type)) )
+#define vmstrdup(vm,s)		(_VMFL_(vm), \
+				 vmstrdup(vm,s))
 #define vmfree(vm,d)		(_VMFL_(vm), \
 				 (*(_VM_(vm)->meth.freef))((vm),(Void_t*)(d)) )
 #define vmalign(vm,sz,align)	(_VMFL_(vm), \

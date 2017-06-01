@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -69,7 +69,6 @@ eval val="$z"
 [[ $z == "$val" ]] || err_exit 'compound variable changes after associative array assignment'
 eval val="$z"
 (
-false
 	z.foo[two]=ok
 	[[ ${z.foo[two]} == ok ]] || err_exit 'associative array assignment to compound variable in subshell not working'
 	z.bar[1]=yes
@@ -102,6 +101,7 @@ TEST_notfound=notfound
 while	whence $TEST_notfound >/dev/null 2>&1
 do	TEST_notfound=notfound-$RANDOM
 done
+
 
 integer BS=1024 nb=64 ss=60 bs no
 for bs in $BS 1
@@ -469,4 +469,39 @@ then	EXP=$(printf %q "$exp")
 	err_exit "'$cmd' failed -- expected $EXP, got $GOT"
 fi
 
-exit $Errors
+(
+$SHELL -c 'sleep 20 & pid=$!; { x=$( ( seq 60000 ) );kill -9 $pid;}&;wait $pid'
+) 2> /dev/null
+(( $? )) ||  err_exit 'nested command substitution with large output hangs'
+
+(.sh.foo=foobar)
+[[ ${.sh.foo} == foobar ]] && err_exit '.sh subvariables in subshells remain set'
+[[ $($SHELL -c 'print 1 | : "$(/bin/cat <(/bin/cat))"') ]] && err_exit 'process substitution not working correctly in subshells'
+
+# config hang bug
+integer i
+for ((i=1; i < 1000; i++))
+do	typeset foo$i=$i
+done
+{
+    : $( (ac_space=' '; set | grep ac_space) 2>&1) 
+} < /dev/null | cat > /dev/null &
+sleep  1.5
+if	kill -KILL $! 2> /dev/null
+then	err_exit 'process timed out with hung comsub'
+fi
+wait $! 2> /dev/null
+(( $? > 128 )) && err_exit 'incorrect exit status with comsub' 
+
+$SHELL 2> /dev/null -c '[[ ${ print foo },${ print bar } == foo,bar ]]' || err_exit  '${ print foo },${ print bar } not working'
+$SHELL 2> /dev/null -c '[[ ${ print foo; },${ print bar } == foo,bar ]]' || err_exit  '${ print foo; },${ print bar } not working'
+
+src=$'true 2>&1\n: $(true | true)\n: $(true | true)\n: $(true | true)\n'$(whence -p true)
+exp=ok
+got=$( $SHELL -c "(eval '$src'); echo $exp" )
+[[ $got == "$exp" ]] || err_exit 'subshell eval of pipeline clobbers stdout'
+
+x=$( { time $SHELL -c date >| /dev/null;} 2>&1)
+[[ $x == *real*user*sys* ]] || err_exit 'time { ...;} 2>&1 in $(...) fails'
+
+exit $((Errors<125?Errors:125))

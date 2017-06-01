@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1992-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1992-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -83,8 +83,6 @@ b_mktemp(int argc, char** argv, void* context)
 	{
 		switch (optget(argv, usage))
 		{
-		case 0:
-			break;
 		case 'd':
 			fdp = 0;
 			continue;
@@ -115,10 +113,10 @@ b_mktemp(int argc, char** argv, void* context)
 			continue;
 		case ':':
 			error(2, "%s", opt_info.arg);
-			continue;
+			break;
 		case '?':
 			error(ERROR_usage(2), "%s", opt_info.arg);
-			continue;
+			break;
 		}
 		break;
 	}

@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -220,7 +220,7 @@ static int whence(Shell_t *shp,char **argv, register int flags)
 		}
 		do
 		{
-			if(path_search(name,&pp,2+(aflag>1)))
+			if(path_search(shp,name,&pp,2+(aflag>1)))
 				cp = name;
 			else
 			{
@@ -229,12 +229,15 @@ static int whence(Shell_t *shp,char **argv, register int flags)
 					cp = 0;
 				else if(*cp!='/')
 				{
-					cp = path_fullname(cp);
+					cp = path_fullname(shp,cp);
 					tofree=1;
 				}
 			}
 			if(flags&Q_FLAG)
+			{
+				pp = 0;
 				r |= !cp;
+			}
 			else if(cp)
 			{
 				if(flags&V_FLAG)
@@ -242,7 +245,7 @@ static int whence(Shell_t *shp,char **argv, register int flags)
 					if(*cp!= '/')
 					{
 						if(!np && (np=nv_search(name,shp->track_tree,0)))
-							sfprintf(sfstdout,"%s %s %s/%s\n",name,sh_translate(is_talias),path_pwd(0),cp);
+							sfprintf(sfstdout,"%s %s %s/%s\n",name,sh_translate(is_talias),path_pwd(shp,0),cp);
 						else if(!np || nv_isnull(np))
 							sfprintf(sfstdout,"%s%s\n",name,sh_translate(is_ufunction));
 						continue;

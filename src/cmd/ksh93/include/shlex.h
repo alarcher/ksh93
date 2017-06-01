@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -48,6 +48,7 @@ typedef struct  _shlex_
 	char		intypeset;	/* on when processing typeset */
 	char		comp_assign;	/* in compound assignment */
 	char		comsub;		/* parsing command substitution */
+	char		noreserv;	/* reserved works not legal */
 	int		inlineno;	/* saved value of sh.inlineno */
 	int		firstline;	/* saved value of sh.st.firstline */
 #if SHOPT_KIA
@@ -113,6 +114,7 @@ typedef struct  _shlex_
 #define IORDWRSYM	(SYMGT|'<')
 #define IORDWRSYMT	(SYMSEMI|'<')
 #define IOCLOBSYM	(SYMPIPE|'>')
+#define PIPESYM2	(SYMPIPE|'&')
 #define IPROCSYM	(SYMLPAR|'<')
 #define OPROCSYM	(SYMLPAR|'>')
 #define EOFSYM		04000	/* end-of-file */

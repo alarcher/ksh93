@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -457,7 +457,7 @@ typeset -C more_content=(
 	some_stuff="hello"
 )
 mica01[4]+=more_content
-expected=$'typeset -C -a mica01=([4]=(a_string=\'foo bar\';some_stuff=hello;))'
+expected=$'typeset -C -a mica01=([4]=(a_string=\'foo bar\';some_stuff=hello))'
 [[ $(typeset -p mica01) == "$expected" ]] || err_exit 'appened to indexed array compound variable not working'
 
 unset x
@@ -476,7 +476,7 @@ typeset -C -A hello19=(
 		two="xtwo 23"
 	)
 )
-expected="typeset -C -A hello19=([19]=(one='xone 19';two='xtwo 19';) [23]=(one='xone 23';two='xtwo 23';))"
+expected="typeset -C -A hello19=([19]=(one='xone 19';two='xtwo 19') [23]=(one='xone 23';two='xtwo 23'))"
 [[ $(typeset -p hello19) == "$expected" ]] || print -u2 'typeset -p hello19 incorrect'
 expected=$'(\n\tone=\'xone 19\'\n\ttwo=\'xtwo 19\'\n) (\n\tone=\'xone 23\'\n\ttwo=\'xtwo 23\'\n)'
 [[ ${hello19[@]} == "$expected" ]] || print -u2 '${hello19[@]} incorrect'
@@ -513,7 +513,7 @@ expected=$'(\n\ttypeset -A subtree=(\n\t\t[a_node]=(\n\t\t\tone=hello\n\t\t\ttwo
 
 typeset -C -A array
 float array[12].amount=2.9 
-expected='typeset -C -A array=([12]=(typeset -l -E amount=2.9;))'
+expected='typeset -C -A array=([12]=(typeset -l -E amount=2.9))'
 [[ $(typeset -p array) == "$expected" ]] || err_exit 'typeset with compound  variable with compound variable array not working'
 
 typeset -T foo_t=(
@@ -538,4 +538,102 @@ compound x=(
 ) 
 [[ $x == *f=2* ]] ||  err_exit "The field b containg 'f=2' is missing"
 
-exit $((Errors))
+unset x
+compound x=(
+        compound -a nodes=(
+                 [4]=( )
+        )
+) 
+expected='typeset -C x=(typeset -C -a nodes=([4]=());)'
+[[ $(typeset -p x) == "$expected" ]] || err_exit 'typeset -p with nested compound index array not working'
+
+unset v
+compound v=(
+	integer -A ar=(
+		[aa]=4 [bb]=9
+	) 
+) 
+expected='typeset -C v=(typeset -A -l -i ar=([aa]=4 [bb]=9);)'
+[[ $(typeset -p v) == "$expected" ]] || err_exit 'attributes for associative arrays embedded in compound variables not working'
+
+unset x
+compound -a x
+x[1]=( a=1 b=2 )
+[[ $(print -v x[1]) == "${x[1]}" ]] || err_exit  'print -v x[1] not working for index array of compound variables'
+
+unset x
+z='typeset -a x=(hello (x=12;y=5) world)'
+{ eval "$z" ;} 2> /dev/null
+[[ $(typeset -p x) == "$z" ]] || err_exit "compound assignment '$z' not working"
+
+expected='typeset -C -A l=([4]=(typeset -a ar=(1 2 3);b=1))'
+typeset -A -C l
+printf "( typeset -a ar=( 1\n2\n3\n) b=1 )\n" | read -C l[4] 
+[[ $(typeset -p l) == "$expected" ]] ||  err_exit 'read -C for associative array of compound variables not working'
+
+unset x
+compound x=( z="a=b c")
+exp=$'typeset -C x=(z=a\\=\'b c\')'
+got=$(typeset -p x)
+[[ $got == "$exp" ]] || err_exit "typeset -p failed -- expected '$exp', got '$got'"
+
+x=(typeset -C -a y;float z=2)
+got=$(print -C x)
+expected='(typeset -C -a y;typeset -l -E z=2)'
+[[ $expected == "$got" ]] || err_exit "print -C x exects '$expected' got '$got'"
+
+unset vx vy
+compound vx=(
+	compound -a va=(
+		[3][17]=(
+			integer -A ar=( [aa]=4 [bb]=9 )
+		)
+	)
+)
+eval "vy=$(print -C vx)"
+[[ $vx == "$vy" ]] || err_exit 'print -C with multi-dimensional array not working'
+eval "vy=$(print -v vx)"
+[[ $vx == "$vy" ]] || err_exit 'print -v with multi-dimensional array not working'
+
+unset x
+typeset -C -A x=( [0]=(a=1) [1]=(b=2) )
+expected=$'(\n\t[0]=(\n\t\ta=1\n\t)\n\t[1]=(\n\t\tb=2\n\t)\n)'
+[[ $(print -v x) == "$expected" ]] || err_exit 'print -v not formatting correctly'
+
+compound -a x=( [0]=(a=1) [1]=(b=2) )
+typeset -m "z=x[1]"
+[[ $(typeset -p z 2>/dev/null) == 'typeset -C z=(b=2)' ]] || err_exit 'typeset -m not working with commpound -a variable'
+
+unset x z
+compound -A x=( [0]=(a=1) [1]=(b=2) )
+typeset -m "z=x[1]"
+[[ $(typeset -p z 2>/dev/null) == 'typeset -C z=(b=2)' ]] || err_exit 'typeset -m not working with commpound -a variable'
+typeset -m "x[1]=x[0]"
+typeset -m "x[0]=z"
+exp='([0]=(b=2) [1]=(a=1))'
+[[ $(print -C x) == "$exp" ]] || err_exit 'typeset -m not working for associative arrays'
+
+unset z r
+z=(a b c)
+r=(x=3 y=4)
+typeset -m z[1]=r
+exp='typeset -a z=(a (x=3;y=4) c)'
+[[ $(typeset -p z) == "$exp" ]] || err_exit 'moving compound variable into indexed array fails'
+
+unset c
+compound c
+compound -a c.a=( [1]=( aa=1 ) )
+compound -a c.b=( [2]=( bb=2 ) )
+typeset -m "c.b[9]=c.a[1]"
+exp='typeset -C c=(typeset -C -a a;typeset -C -a b=( [2]=(bb=2;)[9]=(aa=1));)'
+[[ $(typeset -p c) == "$exp" ]] || err_exit 'moving compound indexed array element to another index fails'
+
+unset c
+compound c
+compound -a c.a=( [1]=( aa=1 ) )
+compound -A c.b=( [2]=( bb=2 ) )
+typeset -m "c.b[9]=c.a[1]"
+exp='typeset -C c=(typeset -C -a a;typeset -C -A b=( [2]=(bb=2;)[9]=(aa=1));)'
+[[ $(typeset -p c) == "$exp" ]] || err_exit 'moving compound indexed array element to a compound associative array element fails'
+
+exit $((Errors<125?Errors:125))

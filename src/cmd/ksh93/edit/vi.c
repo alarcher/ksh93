@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -218,7 +218,7 @@ int ed_viread(void *context, int fd, register char *shbuf, int nchar, int reedit
 {
 	Edit_t *ed = (Edit_t*)context;
 	register int i;			/* general variable */
-	register int term_char;		/* read() termination character */
+	register int term_char=0;	/* read() termination character */
 	register Vi_t *vp = ed->e_vi;
 	char prompt[PRSIZE+2];		/* prompt */
 	genchar Physical[2*MAXLINE];	/* physical image */
@@ -231,7 +231,7 @@ int ed_viread(void *context, int fd, register char *shbuf, int nchar, int reedit
 #if SHOPT_RAWONLY
 #   define viraw	1
 #else
-	int viraw = (sh_isoption(SH_VIRAW) || sh.st.trap[SH_KEYTRAP]);
+	int viraw = (sh_isoption(SH_VIRAW) || ed->sh->st.trap[SH_KEYTRAP]);
 #   ifndef FIORDCHK
 	clock_t oldtime, newtime;
 	struct tms dummy;
@@ -267,7 +267,7 @@ int ed_viread(void *context, int fd, register char *shbuf, int nchar, int reedit
 #endif /* FIORDCHK */
 #if KSHELL
 		/* abort of interrupt has occurred */
-		if(sh.trapnote&SH_SIGSET)
+		if(ed->sh->trapnote&SH_SIGSET)
 			i = -1;
 		else
 #endif /* KSHELL */
@@ -621,6 +621,10 @@ int ed_viread(void *context, int fd, register char *shbuf, int nchar, int reedit
 			last_virt = ed_external(virtual,shbuf);
 		}
 #endif /* SHOPT_MULTIBYTE */
+#if SHOPT_EDPREDICT
+		if(vp->ed->nhlist)
+			ed_histlist(vp->ed,0);
+#endif /* SHOPT_EDPREDICT */
 		return(last_virt);
 	}
 	else
@@ -854,6 +858,15 @@ static int cntlmode(Vi_t *vp)
 
 		case 'j':		/** get next command **/
 		case '+':		/** get next command **/
+#if SHOPT_EDPREDICT
+			if(vp->ed->hlist)
+			{
+				if(vp->ed->hoff >= vp->ed->hmax)
+					goto ringbell;
+				vp->ed->hoff++;
+				goto hupdate;
+			}
+#endif /* SHOPT_EDPREDICT */
 			curhline += vp->repeat;
 			if( curhline > histmax )
 			{
@@ -874,6 +887,19 @@ static int cntlmode(Vi_t *vp)
 
 		case 'k':		/** get previous command **/
 		case '-':		/** get previous command **/
+#if SHOPT_EDPREDICT
+			if(vp->ed->hlist)
+			{
+				if(vp->ed->hoff == 0)
+					goto ringbell;
+				vp->ed->hoff--;
+			 hupdate:
+				ed_histlist(vp->ed,*vp->ed->hlist!=0);
+				vp->nonewline++;
+				ed_ungetchar(vp->ed,cntl('L'));
+				continue;
+			}
+#endif /* SHOPT_EDPREDICT */
 			if( curhline == histmax )
 			{
 				vp->u_space = tmp_u_space;
@@ -907,6 +933,17 @@ static int cntlmode(Vi_t *vp)
 #endif /* SHOPT_MULTIBYTE */
 			if((last_virt=genlen(virtual)-1) >= 0  && cur_virt == INVALID)
 				cur_virt = 0;
+#if SHOPT_EDPREDICT
+			if(vp->ed->hlist)
+			{
+				ed_histlist(vp->ed,0);
+				if(c=='\n')
+					ed_ungetchar(vp->ed,c);
+				ed_ungetchar(vp->ed,cntl('L'));
+				vp->nonewline = 1;
+				cur_virt = 0;
+			}
+#endif /*SHOPT_EDPREDICT */
 			break;
 
 
@@ -991,8 +1028,21 @@ static int cntlmode(Vi_t *vp)
 			}
 
 		case '\n':		/** send to shell **/
+#if SHOPT_EDPREDICT
+			if(!vp->ed->hlist)
 			return(ENTER);
-
+		case '\t':		/** bring choice to edit **/
+			if(vp->ed->hlist)
+			{
+				if(vp->repeat > vp->ed->nhlist-vp->ed->hoff)
+					goto ringbell;
+				curhline = vp->ed->hlist[vp->repeat+vp->ed->hoff-1]->index;
+				goto newhist;
+			}
+			goto ringbell;
+#else
+			return(ENTER);
+#endif /* SHOPT_EDPREDICT */
 	        case ESC:
 			/* don't ring bell if next char is '[' */
 			if(!lookahead)
@@ -1317,7 +1367,6 @@ static void getline(register Vi_t* vp,register int mode)
 	register int tmp;
 	int	max_virt=0, last_save=0;
 	genchar saveline[MAXLINE];
-
 	vp->addnl = 1;
 
 	if( mode == ESC )
@@ -1338,6 +1387,8 @@ static void getline(register Vi_t* vp,register int mode)
 			c = UWERASE;
 		else if( c == usrlnext )
 			c = ULNEXT;
+		else if(mode==SEARCH && c==editb.e_intr)
+			c = UINTR;
 
 		if( c == ULNEXT)
 		{
@@ -1400,6 +1451,11 @@ static void getline(register Vi_t* vp,register int mode)
 			}
 			break;
 
+		case UINTR:
+				first_virt = 0;
+				cdelete(vp,cur_virt+1, BAD);
+				cur_virt = -1;
+				return;
 		case UERASE:		/** user erase char **/
 				/*** treat as backspace ***/
 
@@ -1567,7 +1623,11 @@ static int mvcursor(register Vi_t* vp,register int motion)
 		switch(motion=getcount(vp,ed_getchar(vp->ed,-1)))
 		{
 		    case 'A':
+#if SHOPT_EDPREDICT
+			if(!vp->ed->hlist && cur_virt>=0  && cur_virt<(SEARCHSIZE-2) && cur_virt == last_virt)
+#else
 			if(cur_virt>=0  && cur_virt<(SEARCHSIZE-2) && cur_virt == last_virt)
+#endif /* SHOPT_EDPREDICT */
 			{
 				virtual[last_virt + 1] = '\0';
 #if SHOPT_MULTIBYTE
@@ -1825,6 +1885,31 @@ static void refresh(register Vi_t* vp, int mode)
 			mode = TRANSLATE;
 	}
 	v = cur_virt;
+#if SHOPT_EDPREDICT
+	if(mode==INPUT && v>0 && virtual[0]=='#' && virtual[v]!='*')
+	{
+		int		n;
+		virtual[last_virt+1] = 0;
+#   if SHOPT_MULTIBYTE
+		ed_external(virtual,(char*)virtual);
+#   endif /* SHOPT_MULTIBYTE */
+		n = ed_histgen(vp->ed,(char*)virtual);
+#   if SHOPT_MULTIBYTE
+		ed_internal((char*)virtual,virtual);
+#   endif /* SHOPT_MULTIBYTE */
+		if(vp->ed->hlist)
+		{
+			ed_histlist(vp->ed,n);
+			pr_string(vp,Prompt);
+			vp->ocur_virt = INVALID;
+			ed_setcursor(vp->ed,physical,0,cur_phys,0);
+		}
+		else
+			ed_ringbell();
+	}
+	else if(mode==INPUT && v<=1 && vp->ed->hlist)
+		ed_histlist(vp->ed,0);
+#endif /* SHOPT_EDPREDICT */
 	if( v<vp->ocur_virt || vp->ocur_virt==INVALID
 		|| ( v==vp->ocur_virt
 			&& (!is_print(virtual[v]) || !is_print(vp->o_v_char))) )
@@ -2185,7 +2270,7 @@ static int search(register Vi_t* vp,register int mode)
 		i = INVALID;
 		if( new_direction==1 && curhline >= histmax )
 			curhline = histmin + 1;
-		location = hist_find(sh.hist_ptr,((char*)virtual)+1, curhline, 1, new_direction);
+		location = hist_find(shgd->hist_ptr,((char*)virtual)+1, curhline, 1, new_direction);
 	}
 	cur_virt = i;
 	strncpy(lsearch, ((char*)virtual)+1, SEARCHSIZE);

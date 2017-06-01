@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -605,7 +605,7 @@ toplist(FTS* fts, register char* const* pathnames)
 			break;
 		path = f->fts_name;
 		if (!physical)
-			f->fts_namelen = (fts->flags & FTS_SEEDOTDIR) ? strlen(path) : (pathcanon(path, 0) - path);
+			f->fts_namelen = (fts->flags & FTS_SEEDOTDIR) ? strlen(path) : (pathcanon(path, strlen(path) + 1, 0) - path);
 		else if (*path != '.')
 		{
 			f->fts_namelen = strlen(path);
@@ -792,7 +792,11 @@ fts_open(char* const* pathnames, int flags, int (*comparf)(FTSENT* const*, FTSEN
 	}
 	else
 		fts->todo = toplist(fts, pathnames);
+#if _HUH_1997_01_07
 	if (!fts->todo || fts->todo->fts_info == FTS_NS && !fts->todo->fts_link)
+#else
+	if (!fts->todo)
+#endif
 	{
 		fts_close(fts);
 		return 0;

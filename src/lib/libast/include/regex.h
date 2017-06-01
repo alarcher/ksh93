@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -36,8 +36,9 @@
 #undef	regmatch_t
 
 #include <ast_common.h>
+#include <ast_wchar.h>
 
-#define REG_VERSION	20030916L
+#define REG_VERSION	20100930L
 
 /* regcomp flags */
 
@@ -170,10 +171,11 @@ struct regdisc_s
 
 typedef struct regstat_s
 {
-	regflags_t	re_flags;	/* REG_LEFT|REG_RIGHT		*/
+	regflags_t	re_flags;	/* REG_*			*/
 	ssize_t		re_min;		/* min anchored match length	*/
 	ssize_t		re_max;		/* max anchored match length	*/
 	ssize_t		re_record;	/* regrexec() match length	*/
+	regflags_t	re_info;	/* REG_* info			*/
 } regstat_t;
 
 struct regex_s
@@ -213,7 +215,7 @@ extern void	regfree(regex_t*);
 
 extern regclass_t regclass(const char*, char**);
 extern int	regaddclass(const char*, regclass_t);
-extern int	regcollate(const char*, char**, char*, int);
+extern int	regcollate(const char*, char**, char*, size_t, wchar_t*);
 extern int	regcomb(regex_t*, regex_t*);
 extern size_t	regdecomp(regex_t*, regflags_t, char*, size_t);
 extern int	regdup(regex_t*, regex_t*);

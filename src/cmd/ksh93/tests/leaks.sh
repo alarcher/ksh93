@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -42,6 +42,12 @@ function test_reset
 }
 
 n=1000
+
+# one round to get to steady state -- sensitive to -x
+
+test_reset $n
+a=0$(vmstate --format='+%(size)u')
+
 test_reset $n
 a=0$(vmstate --format='+%(size)u')
 test_reset $n
@@ -51,4 +57,11 @@ if	(( b > a ))
 then	err_exit "variable value reset memory leak -- $((b-a)) bytes after $n iterations"
 fi
 
-exit $((Errors))
+# buffer boundary tests
+
+for exp in 65535 65536
+do	got=$($SHELL -c 'x=$(printf "%.*c" '$exp' x); print ${#x}' 2>&1)
+	[[ $got == $exp ]] || err_exit "large command substitution failed -- expected $exp, got $got"
+done
+
+exit $((Errors<125?Errors:125))

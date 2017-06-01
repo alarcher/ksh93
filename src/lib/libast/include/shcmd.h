@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -27,6 +27,14 @@
 
 #ifndef _SHCMD_H
 #define _SHCMD_H	1
+
+#define SH_PLUGIN_VERSION	AST_PLUGIN_VERSION(20100528L)
+
+#if __STDC__
+#define SHLIB(m)	unsigned long	plugin_version(void) { return SH_PLUGIN_VERSION; }
+#else
+#define SHLIB(m)	unsigned long	plugin_version() { return SH_PLUGIN_VERSION; }
+#endif
 
 #ifndef SH_VERSION
 #   define Shell_t	void
@@ -71,6 +79,7 @@ typedef struct Shbltin_s
 #   define sh_system(c,str)	((c)?(*sh_context(c)->shtrap)(str,0):system(str))
 #   define sh_exit(c,n)		((c)?(*sh_context(c)->shexit)(n):exit(n))
 #   define sh_checksig(c)	((c) && sh_context(c)->sigset)
+#   define sh_builtin(c,n,f,p)	((c)?(*sh_context(c)->shbltin)(n,(Shbltin_f)(f),(void*)(p)):0)
 #   if defined(SFIO_VERSION) || defined(_AST_H)
 #	define LIB_INIT(c)
 #   else

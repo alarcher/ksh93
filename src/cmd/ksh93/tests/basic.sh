@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -219,11 +219,13 @@ x=$( (/bin/echo foo) 2> /dev/null )
 if	[[ $x != foo ]]
 then	err_exit "subshell in command substitution fails"
 fi
+exec 9>& 1
 exec 1>&-
 x=$(print hello)
 if	[[ $x != hello ]]
 then	err_exit "command subsitution with stdout closed failed"
 fi
+exec >& 9
 cd $pwd
 x=$(cat <<\! | $SHELL
 /bin/echo | /bin/cat
@@ -409,7 +411,7 @@ unset foo
 unset foo
 foo=$(false) > /dev/null && err_exit 'failed command substitution with redirection not returning false'
 expected=foreback
-got=$(print -n fore;(sleep 2;print back)&)
+got=$(print -n fore; (sleep 2;print back)&)
 [[ $got == $expected ]] || err_exit "command substitution background process output error -- got '$got', expected '$expected'"
 
 binfalse=$(whence -p false)
@@ -465,18 +467,44 @@ got=$(
 
 ( $SHELL -c 'trap : DEBUG; x=( $foo); exit 0') 2> /dev/null  || err_exit 'trap DEBUG fails'
 
-true=$(whence -p true)
+bintrue=$(whence -p true)
 set -o pipefail
 float start=$SECONDS end 
 for ((i=0; i < 2; i++))
 do	print foo
 	sleep 1.5
-done | { read; $true; end=$SECONDS ;}
+done | { read; $bintrue; end=$SECONDS ;}
 (( (SECONDS-start) < 1 )) && err_exit "pipefail not waiting for pipe to finish"
 set +o pipefail
-(( (SECONDS-start) > 2 )) &&  err_exit "pipefail causing /bin/true to wait for other end of pipe"
+(( (SECONDS-end) > 2 )) &&  err_exit "pipefail causing $bintrue to wait for other end of pipe"
 
 
 { env A__z=C+SHLVL $SHELL -c : ;} 2> /dev/null || err_exit "SHLVL with wrong attribute fails"
 
-exit $((Errors))
+if [[ $bintrue ]]
+then	float t0=SECONDS
+	{ time sleep 1.5 | $bintrue ;} 2> /dev/null
+	(( (SECONDS-t0) < 1 )) && err_exit 'time not waiting for pipeline to complete' 
+fi
+
+cat > $tmp/foo.sh <<- \EOF
+	eval "cat > /dev/null  < /dev/null"
+	sleep 1
+EOF
+float sec=SECONDS
+. $tmp/foo.sh  | cat > /dev/null
+(( (SECONDS-sec) < .7 ))  && err_exit '. script does not restore output redirection with eval'
+
+file=$tmp/foobar
+builtin cat
+for ((n=0; n < 1000; n++))
+do
+	> $file
+	{ sleep .001;echo $? >$file;} | cat > /dev/null
+	if	[[ !  -s $file ]]
+	then	err_exit 'output from pipe is lost with pipe to builtin'
+		break;
+	fi
+done
+
+exit $((Errors<125?Errors:125))

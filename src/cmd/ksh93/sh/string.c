@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -306,41 +306,27 @@ char	*sh_fmtq(const char *string)
 	if(!cp)
 		return((char*)0);
 	offset = staktell();
-#if SHOPT_MULTIBYTE
 	state = ((c= mbchar(cp))==0);
-#else
-	state = ((c= *(unsigned char*)cp++)==0);
-#endif
 	if(isaletter(c))
 	{
-#if SHOPT_MULTIBYTE
 		while((c=mbchar(cp)),isaname(c));
-#else
-		while((c = *(unsigned char*)cp++),isaname(c));
-#endif
 		if(c==0)
 			return((char*)string);
 		if(c=='=')
 		{
 			if(*cp==0)
 				return((char*)string);
+			if(*cp=='=')
+				cp++;
 			c = cp - string;
 			stakwrite(string,c);
 			string = cp;
-#if SHOPT_MULTIBYTE
 			c = mbchar(cp);
-#else
-			c = *(unsigned char*)cp++;
-#endif
 		}
 	}
 	if(c==0 || c=='#' || c=='~')
 		state = 1;
-#if SHOPT_MULTIBYTE
 	for(;c;c= mbchar(cp))
-#else
-	for(;c; c= *(unsigned char*)cp++)
-#endif
 	{
 #if SHOPT_MULTIBYTE
 		if(c=='\'' || !iswprint(c))
@@ -348,7 +334,7 @@ char	*sh_fmtq(const char *string)
 		if(c=='\'' || !isprint(c))
 #endif /* SHOPT_MULTIBYTE */
 			state = 2;
-		else if(c==']' || (c!=':' && c<=0xff && (c=sh_lexstates[ST_NORM][c]) && c!=S_EPAT))
+		else if(c==']' || c=='=' || (c!=':' && c<=0x7f && (c=sh_lexstates[ST_NORM][c]) && c!=S_EPAT))
 			state |=1;
 	}
 	if(state<2)
@@ -677,8 +663,8 @@ char *sh_checkid(char *str, char *last)
 	register unsigned char *cp = (unsigned char*)str;
 	register unsigned char *v = cp;
 	register int c;
-	if(c= *cp++,isaletter(c))
-		while(c= *cp++,isaname(c));
+	if(c=mbchar(cp),isaletter(c))
+		while(c=mbchar(cp),isaname(c));
 	if(c==']' && (!last || ((char*)cp==last)))
 	{
 		/* eliminate [ and ] */

@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -52,7 +52,7 @@ prog(const char* command, char* path, size_t size)
 #endif
 
 #ifdef _PROC_PROG
-	if ((n = readlink(_PROC_PROG, path, size)) > 0)
+	if ((n = readlink(_PROC_PROG, path, size)) > 0 && *path == '/')
 	{
 		if (n < size)
 			path[n] = 0;
@@ -60,7 +60,7 @@ prog(const char* command, char* path, size_t size)
 	}
 #endif
 #if _lib_getexecname
-	if (s = (char*)getexecname())
+	if ((s = (char*)getexecname()) && *s == '/')
 	{
 		n = strlen(s);
 		if (n < size)
@@ -105,15 +105,13 @@ prog(const char* command, char* path, size_t size)
 size_t
 pathprog(const char* command, char* path, size_t size)
 {
+	char*		rel;
 	ssize_t		n;
-	char		buf[PATH_MAX];
 
-	if ((n = prog(command, path, size)) > 0 && n <= size && *path != '/')
+	if ((n = prog(command, path, size)) > 0 && n < size && *path != '/' && (rel = strdup(path)))
 	{
-		if (!pathpath(buf, path, NiL, PATH_REGULAR|PATH_EXECUTE))
-			n = 0;
-		else if ((n = strlen(buf) + 1) <= size)
-			memcpy(path, buf, n);
+		n = pathpath(rel, NiL, PATH_REGULAR|PATH_EXECUTE, path, size) ? strlen(path) : 0;
+		free(rel);
 	}
 	return n;
 }

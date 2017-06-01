@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -166,7 +166,7 @@ regcache(const char* pattern, regflags_t reflags, int* status)
 			cp->keep = 0;
 			regfree(&cp->re);
 		}
-		if ((i = strlen(pattern)) >= cp->size)
+		if ((i = strlen(pattern) + 1) > cp->size)
 		{
 			cp->size = roundof(i, ROUND);
 			if (!(cp->pattern = newof(cp->pattern, char, cp->size, 0)))

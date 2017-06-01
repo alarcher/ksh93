@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1992-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1992-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -27,89 +27,99 @@
  */
 
 static const char usage_head[] =
-"[-?@(#)$Id: cp (AT&T Research) 2010-01-20 $\n]"
+"[-?@(#)$Id: cp (AT&T Research) 2010-10-20 $\n]"
 USAGE_LICENSE
 ;
 
 static const char usage_cp[] =
 "[+NAME?cp - copy files]"
-"[+DESCRIPTION?If the last argument names an existing directory, \bcp\b"
-"	copies each \afile\a into a file with the same name in that"
-"	directory. Otherwise, if only two files are given, \bcp\b copies"
-"	the first onto the second. It is an error if the last argument is"
-"	not a directory and more than two files are given. By default"
-"	directories are not copied.]"
+"[+DESCRIPTION?If the last argument names an existing directory, \bcp\b "
+    "copies each \afile\a into a file with the same name in that directory. "
+    "Otherwise, if only two files are given, \bcp\b copies the first onto "
+    "the second. It is an error if the last argument is not a directory and "
+    "more than two files are given. By default directories are not copied.]"
 
-"[a:archive?Preserve as much as possible of the structure and attributes of"
-"	the original files in the copy. Equivalent to \b--physical\b"
-"	\b--preserve\b \b--recursive\b.]"
+"[a:archive?Preserve as much as possible of the structure and attributes "
+    "of the original files in the copy. Equivalent to \b--physical\b "
+    "\b--preserve\b \b--recursive\b.]"
+"[A:attributes?Preserve selected file attributes:]:[eipt]"
+    "{"
+        "[+e?Everything permissible.]"
+        "[+i?Owner uid and gid.]"
+        "[+p?Permissions.]"
+        "[+t?Access and modify times.]"
+    "}"
 "[p:preserve?Preserve file owner, group, permissions and timestamps.]"
-"[h:hierarchy|parents?Form the name of each destination file by appending"
-"	to the target directory a slash and the specified source file name."
-"	The last argument must be an existing directory. Missing destination"
-"	directories are created.]"
-"[H:metaphysical?Follow command argument symbolic links, otherwise don't"
-"	follow.]"
+"[h:hierarchy|parents?Form the name of each destination file by "
+    "appending to the target directory a slash and the specified source file "
+    "name. The last argument must be an existing directory. Missing "
+    "destination directories are created.]"
+"[H:metaphysical?Follow command argument symbolic links, otherwise don't "
+    "follow.]"
 "[l:link?Make hard links to destination files instead of copies.]"
-"[L:logical|dereference?Follow symbolic links and copy the files"
-"	they point to.]"
-"[P|d:physical|nodereference?Don't follow symbolic links; copy symbolic"
-"	rather than the files they point to.]"
+"[U:remove-destination?Remove existing destination files before copying.]"
+"[L:logical|dereference?Follow symbolic links and copy the files they "
+    "point to.]"
+"[P|d:physical|nodereference?Don't follow symbolic links; copy symbolic "
+    "rather than the files they point to.]"
 ;
 
 static const char usage_ln[] =
 "[+NAME?ln - link files]"
-"[+DESCRIPTION?If the last argument names an existing directory, \bln\b"
-"	links each \afile\a into a file with the same name in that"
-"	directory. Otherwise, if only two files are given, \bln\b links"
-"	the first onto the second. It is an error if the last argument is"
-"	not a directory and more than two files are given. By default"
-"	directories are not linked.]"
+"[+DESCRIPTION?If the last argument names an existing directory, \bln\b "
+    "links each \afile\a into a file with the same name in that directory. "
+    "Otherwise, if only two files are given, \bln\b links the first onto the "
+    "second. It is an error if the last argument is not a directory and more "
+    "than two files are given. By default directories are not linked.]"
 ;
 
 static const char usage_mv[] =
 "[+NAME?mv - rename files]"
-"[+DESCRIPTION?If the last argument names an existing directory, \bmv\b"
-"	renames each \afile\a into a file with the same name in that"
-"	directory. Otherwise, if only two files are given, \bmv\b renames"
-"	the first onto the second. It is an error if the last argument is"
-"	not a directory and more than two files are given. If a source and"
-"	destination file reside on different filesystems then \bmv\b copies"
-"	the file contents to the destination and then deletes the source"
-"	file.]"
+"[+DESCRIPTION?If the last argument names an existing directory, \bmv\b "
+    "renames each \afile\a into a file with the same name in that directory. "
+    "Otherwise, if only two files are given, \bmv\b renames the first onto "
+    "the second. It is an error if the last argument is not a directory and "
+    "more than two files are given. If a source and destination file reside "
+    "on different filesystems then \bmv\b copies the file contents to the "
+    "destination and then deletes the source file.]"
+
+"[U:remove-destination?Remove existing destination files before moving.]"
 ;
 
 static const char usage_tail[] =
 "[f:force?Replace existing destination files.]"
-"[i:interactive|prompt?Prompt whether to replace existing destination files."
-"	An affirmative response (\by\b or \bY\b) replaces the file, a quit"
-"	response (\bq\b or \bQ\b) exits immediately, and all other"
-"	responses skip the file.]"
+"[i:interactive|prompt?Prompt whether to replace existing destination "
+    "files. An affirmative response (\by\b or \bY\b) replaces the file, a "
+    "quit response (\bq\b or \bQ\b) exits immediately, and all other "
+    "responses skip the file.]"
 "[r|R:recursive?Operate on the contents of directories recursively.]"
 "[s:symlink|symbolic-link?Make symbolic links to destination files.]"
-"[u:update?Replace a destination file only if its modification time is older"
-"	than the corresponding source file modification time.]"
+"[u:update?Replace a destination file only if its modification time is "
+    "older than the corresponding source file modification time.]"
 "[v:verbose?Print the name of each file before operating on it.]"
-"[b:backup?Make backups of files that are about to be replaced. See"
-"	\b--suffix\b and \b--version-control\b for more information.]"
 "[F:fsync|sync?\bfsync\b(2) each file after it is copied.]"
-"[S:backup-suffix|suffix?A backup file is made by renaming the file to the"
-"	same name with the backup suffix appended. The backup suffix is"
-"	determined in this order: this option, the \bSIMPLE_BACKUP_SUFFIX\b,"
-"	environment variable, or the default value \b~\b.]:[suffix]"
-"[V:backup-type|version-control?The backup type is determined in this order:"
-"	this option, the \bVERSION_CONTROL\b environment variable, or the"
-"	default value \bexisting\b. \atype\a may be one of:]:[type]{"
-"		[+numbered|t?Always make numbered backups. The numbered backup"
-"			suffix is \b.\aSNS\a, where \aS\a is the"
-"			\bbackup-suffix\b and \aN\a is the version number,"
-"			starting at 1, incremented with each version.]"
-"		[+existing|nil?Make numbered backups of files that already"
-"			have them, otherwise simple backups.]"
-"		[+simple|never?Always make simple backups.]"
-"}"
-"[x|X|l:xdev|local|mount|one-file-system?Do not descend into directories in"
-"	different filesystems than their parents.]"
+"[B:backup?Make backups of files that are about to be replaced. "
+    "\b--suffix\b sets the backup suffix. The backup type is determined in "
+    "this order: this option, the \bVERSION_CONTROL\b environment variable, "
+    "or the default value \bexisting\b. \atype\a may be one of:]:?[type]"
+    "{"
+        "[+numbered|t?Always make numbered backups. The numbered backup "
+            "suffix is \b.\aSNS\a, where \aS\a is the \bbackup-suffix\b and "
+            "\aN\a is the version number, starting at 1, incremented with "
+            "each version.]"
+        "[+existing|nil?Make numbered backups of files that already have "
+            "them, otherwise simple backups.]"
+        "[+simple|never?Always make simple backups.]"
+	"[+none|off?Disable backups.]"
+    "}"
+"[S:suffix?A backup file is made by renaming the file to the same name "
+    "with the backup suffix appended. The backup suffix is determined in "
+    "this order: this option, the \bSIMPLE_BACKUP_SUFFIX\b, environment "
+    "variable, or the default value \b~\b.]:[suffix]"
+"[b?\b--backup\b using the type in the \bVERSION_CONTROL\b environment "
+    "variable.]"
+"[x|X|l:xdev|local|mount|one-file-system?Do not descend into directories "
+    "in different filesystems than their parents.]"
 
 "\n"
 "\nsource destination\n"
@@ -135,6 +145,10 @@ static const char usage_tail[] =
 #define LN		2
 #define MV		3
 
+#define PRESERVE_IDS	0x1		/* preserve uid gid		*/
+#define PRESERVE_PERM	0x2		/* preserve permissions		*/
+#define PRESERVE_TIME	0x4		/* preserve times		*/
+
 #define BAK_replace	0		/* no backup -- just replace	*/
 #define BAK_existing	1		/* number if already else simple*/
 #define BAK_number	2		/* append .suffix number suffix	*/
@@ -156,8 +170,9 @@ typedef struct State_s			/* program state		*/
 	int		perm;		/* permissions to preserve	*/
 	int		postsiz;	/* state.path post index	*/
 	int		presiz;		/* state.path pre index		*/
-	int		preserve;	/* preserve { id mode time }	*/
+	int		preserve;	/* preserve { ids perms times }	*/
 	int		recursive;	/* subtrees too			*/
+	int		remove;		/* remove destination before op	*/
 	int		suflen;		/* strlen(state.suffix)		*/
 	int		sync;		/* fsync() each file after copy	*/
 	int		uid;		/* caller uid			*/
@@ -192,22 +207,25 @@ preserve(State_t* state, const char* path, struct stat* ns, struct stat* os)
 {
 	int	n;
 
-	if (tmxtouch(path, tmxgetatime(os), tmxgetmtime(os), TMX_NOTIME, 0))
+	if ((state->preserve & PRESERVE_TIME) && tmxtouch(path, tmxgetatime(os), tmxgetmtime(os), TMX_NOTIME, 0))
 		error(ERROR_SYSTEM|2, "%s: cannot reset access and modify times", path);
-	n = ((ns->st_uid != os->st_uid) << 1) | (ns->st_gid != os->st_gid);
-	if (n && chown(state->path, os->st_uid, os->st_gid))
-		switch (n)
-		{
-		case 01:
-			error(ERROR_SYSTEM|2, "%s: cannot reset group to %s", path, fmtgid(os->st_gid));
-			break;
-		case 02:
-			error(ERROR_SYSTEM|2, "%s: cannot reset owner to %s", path, fmtuid(os->st_uid));
-			break;
-		case 03:
-			error(ERROR_SYSTEM|2, "%s: cannot reset owner to %s and group to %s", path, fmtuid(os->st_uid), fmtgid(os->st_gid));
-			break;
-		}
+	if (state->preserve & PRESERVE_IDS)
+	{
+		n = ((ns->st_uid != os->st_uid) << 1) | (ns->st_gid != os->st_gid);
+		if (n && chown(state->path, os->st_uid, os->st_gid))
+			switch (n)
+			{
+			case 01:
+				error(ERROR_SYSTEM|2, "%s: cannot reset group to %s", path, fmtgid(os->st_gid));
+				break;
+			case 02:
+				error(ERROR_SYSTEM|2, "%s: cannot reset owner to %s", path, fmtuid(os->st_uid));
+				break;
+			case 03:
+				error(ERROR_SYSTEM|2, "%s: cannot reset owner to %s and group to %s", path, fmtuid(os->st_uid), fmtgid(os->st_gid));
+				break;
+			}
+	}
 }
 
 /*
@@ -318,7 +336,7 @@ visit(State_t* state, register FTSENT* ent)
 			{
 				if ((ent->fts_statp->st_mode & S_IPERM) != (st.st_mode & S_IPERM) && chmod(state->path, ent->fts_statp->st_mode & S_IPERM))
 					error(ERROR_SYSTEM|2, "%s: cannot reset directory mode to %s", state->path, fmtmode(st.st_mode & S_IPERM, 0) + 1);
-				if (state->preserve)
+				if (state->preserve & (PRESERVE_IDS|PRESERVE_TIME))
 					preserve(state, state->path, &st, ent->fts_statp);
 			}
 		}
@@ -406,7 +424,7 @@ visit(State_t* state, register FTSENT* ent)
 		 * target is in top 3d view
 		 */
 
-		if (st.st_dev == ent->fts_statp->st_dev && st.st_ino == ent->fts_statp->st_ino)
+		if (state->op != LN && st.st_dev == ent->fts_statp->st_dev && st.st_ino == ent->fts_statp->st_ino)
 		{
 			if (state->op == MV)
 			{
@@ -429,12 +447,13 @@ visit(State_t* state, register FTSENT* ent)
 		}
 		if (state->verbose)
 			sfputr(sfstdout, state->path, '\n');
-		rm = state->op == LN || ent->fts_info == FTS_SL;
+		rm = state->remove || ent->fts_info == FTS_SL;
 		if (!rm || !state->force)
 		{
-			if ((n = open(state->path, O_RDWR|O_BINARY)) >= 0)
+			if (S_ISLNK(st.st_mode) && (n = -1) || (n = open(state->path, O_RDWR|O_BINARY)) >= 0)
 			{
-				close(n);
+				if (n >= 0)
+					close(n);
 				if (state->force)
 					/* ok */;
 				else if (state->interactive)
@@ -635,9 +654,10 @@ visit(State_t* state, register FTSENT* ent)
 					error(ERROR_SYSTEM|2, "%s: cannot stat", state->path);
 				else
 				{
-					if ((ent->fts_statp->st_mode & state->perm) != (st.st_mode & state->perm) && chmod(state->path, ent->fts_statp->st_mode & state->perm))
+					if ((state->preserve & PRESERVE_PERM) && (ent->fts_statp->st_mode & state->perm) != (st.st_mode & state->perm) && chmod(state->path, ent->fts_statp->st_mode & state->perm))
 						error(ERROR_SYSTEM|2, "%s: cannot reset mode to %s", state->path, fmtmode(st.st_mode & state->perm, 0) + 1);
-					preserve(state, state->path, &st, ent->fts_statp);
+					if (state->preserve & (PRESERVE_IDS|PRESERVE_TIME))
+						preserve(state, state->path, &st, ent->fts_statp);
 				}
 			}
 			if (state->op == MV && remove(ent->fts_path))
@@ -688,7 +708,7 @@ b_cp(int argc, register char** argv, void* context)
 	if (!state->tmp && !(state->tmp = sfstropen()))
 		error(ERROR_SYSTEM|3, "out of space [tmp string]");
 	sfputr(state->tmp, usage_head, -1);
-	standard = !strcmp(astconf("CONFORMANCE", NiL, NiL), "standard");
+	standard = !!conformance(0, 0);
 	switch (error_info.id[0])
 	{
 	case 'c':
@@ -704,6 +724,7 @@ b_cp(int argc, register char** argv, void* context)
 		state->op = LN;
 		state->flags |= FTS_PHYSICAL;
 		state->link = link;
+		state->remove = 1;
 		state->stat = lstat;
 		path_resolve = 1;
 		break;
@@ -712,7 +733,7 @@ b_cp(int argc, register char** argv, void* context)
 		sfputr(state->tmp, usage_mv, -1);
 		state->op = MV;
 		state->flags |= FTS_PHYSICAL;
-		state->preserve = 1;
+		state->preserve = PRESERVE_IDS|PRESERVE_PERM|PRESERVE_TIME;
 		state->stat = lstat;
 		path_resolve = 1;
 		break;
@@ -730,9 +751,36 @@ b_cp(int argc, register char** argv, void* context)
 		{
 		case 'a':
 			state->flags |= FTS_PHYSICAL;
-			state->preserve = 1;
+			state->preserve = PRESERVE_IDS|PRESERVE_PERM|PRESERVE_TIME;
 			state->recursive = 1;
 			path_resolve = 1;
+			continue;
+		case 'A':
+			s = opt_info.arg;
+			for (;;)
+			{
+				switch (*s++)
+				{
+				case 0:
+					break;
+				case 'e':
+					state->preserve |= PRESERVE_IDS|PRESERVE_PERM|PRESERVE_TIME;
+					continue;
+				case 'i':
+					state->preserve |= PRESERVE_IDS;
+					continue;
+				case 'p':
+					state->preserve |= PRESERVE_PERM;
+					continue;
+				case 't':
+					state->preserve |= PRESERVE_TIME;
+					continue;
+				default:
+					error(1, "%s=%c: unknown attribute flag", opt_info.option, *(s - 1));
+					continue;
+				}
+				break;
+			}
 			continue;
 		case 'b':
 			state->backup = 1;
@@ -756,7 +804,7 @@ b_cp(int argc, register char** argv, void* context)
 			state->stat = lstat;
 			continue;
 		case 'p':
-			state->preserve = 1;
+			state->preserve = PRESERVE_IDS|PRESERVE_PERM|PRESERVE_TIME;
 			continue;
 		case 'r':
 			state->recursive = 1;
@@ -776,6 +824,10 @@ b_cp(int argc, register char** argv, void* context)
 			continue;
 		case 'x':
 			state->flags |= FTS_XDEV;
+			continue;
+		case 'B':
+			backup_type = opt_info.arg;
+			state->backup = 1;
 			continue;
 		case 'F':
 #if _lib_fsync
@@ -806,8 +858,8 @@ b_cp(int argc, register char** argv, void* context)
 		case 'S':
 			state->suffix = opt_info.arg;
 			continue;
-		case 'V':
-			backup_type = opt_info.arg;
+		case 'U':
+			state->remove = 1;
 			continue;
 		case '?':
 			error(ERROR_USAGE|4, "%s", opt_info.arg);
@@ -841,7 +893,7 @@ b_cp(int argc, register char** argv, void* context)
 	if (state->backup)
 	{
 		if (!(file = backup_type) && !(backup_type = getenv("VERSION_CONTROL")))
-			state->backup = BAK_existing;
+			state->backup = 0;
 		else
 			switch (strkey(backup_type))
 			{
@@ -866,6 +918,14 @@ b_cp(int argc, register char** argv, void* context)
 			case HASHKEY2('s','i'):
 			case HASHKEY1('s'):
 				state->backup = BAK_simple;
+				break;
+			case HASHKEY4('n','o','n','e'):
+			case HASHKEY3('n','o','n'):
+			case HASHKEY2('n','o'):
+			case HASHKEY3('o','f','f'):
+			case HASHKEY2('o','f'):
+			case HASHKEY1('o'):
+				state->backup = 0;
 				break;
 			case HASHKEY6('n','u','m','b','e','r'):
 			case HASHKEY5('n','u','m','b','e'):
@@ -898,7 +958,7 @@ b_cp(int argc, register char** argv, void* context)
 			s = 0;
 	}
 	if (file != (char*)dot)
-		pathcanon(file, 0);
+		pathcanon(file, 0, 0);
 	if (!(state->directory = !stat(file, &st) && S_ISDIR(st.st_mode)) && argc > 1)
 		error(ERROR_USAGE|4, "%s", optusage(NiL));
 	if (s && !state->directory)

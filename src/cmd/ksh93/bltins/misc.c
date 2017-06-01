@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -150,7 +150,7 @@ int    B_login(int argc,char *argv[],void *extra)
 		pp->mode = SH_JMPEXIT;
 		sh_sigreset(2);
 		sh_freeup(shp);
-		path_exec(pname,argv,NIL(struct argnod*));
+		path_exec(shp,pname,argv,NIL(struct argnod*));
 		sh_done(shp,0);
         }
 	return(1);
@@ -160,8 +160,8 @@ int    b_let(int argc,char *argv[],void *extra)
 {
 	register int r;
 	register char *arg;
+	Shell_t *shp = ((Shbltin_t*)extra)->shp;
 	NOT_USED(argc);
-	NOT_USED(extra);
 	while (r = optget(argv,sh_optlet)) switch (r)
 	{
 	    case ':':
@@ -175,7 +175,7 @@ int    b_let(int argc,char *argv[],void *extra)
 	if(error_info.errors || !*argv)
 		errormsg(SH_DICT,ERROR_usage(2),"%s",optusage((char*)0));
 	while(arg= *argv++)
-		r = !sh_arith(arg);
+		r = !sh_arith(shp,arg);
 	return(r);
 }
 
@@ -240,7 +240,7 @@ int    b_dot_cmd(register int n,char *argv[],void* extra)
 		{
 			if(!np->nvalue.ip)
 			{
-				path_search(script,NIL(Pathcomp_t**),0);
+				path_search(shp,script,NIL(Pathcomp_t**),0);
 				if(np->nvalue.ip)
 				{
 					if(nv_isattr(np,NV_FPOSIX))
@@ -254,9 +254,9 @@ int    b_dot_cmd(register int n,char *argv[],void* extra)
 			np = 0;
 		if(!np)
 		{
-			if((fd=path_open(script,path_get(script))) < 0)
+			if((fd=path_open(shp,script,path_get(shp,script))) < 0)
 				errormsg(SH_DICT,ERROR_system(1),e_open,script);
-			filename = path_fullname(stkptr(shp->stk,PATH_OFFSET));
+			filename = path_fullname(shp,stkptr(shp->stk,PATH_OFFSET));
 		}
 	}
 	*prevscope = shp->st;
@@ -280,7 +280,7 @@ int    b_dot_cmd(register int n,char *argv[],void* extra)
 	shp->posix_fun = 0;
 	if(np || argv[1])
 		argsave = sh_argnew(shp,argv,&saveargfor);
-	sh_pushcontext(&buff,SH_JMPDOT);
+	sh_pushcontext(shp,&buff,SH_JMPDOT);
 	jmpval = sigsetjmp(buff.buff,0);
 	if(jmpval == 0)
 	{
@@ -291,10 +291,11 @@ int    b_dot_cmd(register int n,char *argv[],void* extra)
 		{
 			char buff[IOBSIZE+1];
 			iop = sfnew(NIL(Sfio_t*),buff,IOBSIZE,fd,SF_READ);
+			sh_offstate(SH_NOFORK);
 			sh_eval(iop,0);
 		}
 	}
-	sh_popcontext(&buff);
+	sh_popcontext(shp,&buff);
 	if(!np)
 		free((void*)shp->st.filename);
 	shp->dot_depth--;
@@ -311,8 +312,6 @@ int    b_dot_cmd(register int n,char *argv[],void* extra)
 	memcpy((void*)&shp->st, (void*)prevscope, sizeof(Shscope_t));
 	shp->topscope = (Shscope_t*)prevscope;
 	nv_putval(SH_PATHNAMENOD, shp->st.filename ,NV_NOFREE);
-	if(shp->exitval > SH_EXITSIG)
-		sh_fault(shp->exitval&SH_EXITMASK);
 	if(jmpval && jmpval!=SH_JMPFUN)
 		siglongjmp(*shp->jmplist,jmpval);
 	return(shp->exitval);
@@ -356,7 +355,7 @@ int    b_shift(register int n, register char *argv[], void *extra)
 	if(error_info.errors)
 		errormsg(SH_DICT,ERROR_usage(2),"%s",optusage((char*)0));
 	argv += opt_info.index;
-	n = ((arg= *argv)?(int)sh_arith(arg):1);
+	n = ((arg= *argv)?(int)sh_arith(shp,arg):1);
 	if(n<0 || shp->st.dolc<n)
 		errormsg(SH_DICT,ERROR_exit(1),e_number,arg);
 	else
@@ -500,6 +499,9 @@ int	b_universe(int argc, char *argv[],void *extra)
 #endif /* cmd_universe */
 
 #if SHOPT_FS_3D
+#if _UWIN
+#include <sys/mount.h>
+#endif
 #   if 0
     /* for the dictionary generator */
     int	b_vmap(int argc,char *argv[], void *extra){}
@@ -531,8 +533,12 @@ int	b_universe(int argc, char *argv[],void *extra)
 	}
 	if(error_info.errors)
 		errormsg(SH_DICT,ERROR_usage(2),"%s",optusage((char*)0));
-	if(!shp->lim.fs3d)
+#ifdef MS_3D
+	flag |= MS_3D;
+#else
+	if(!shp->gd->lim.fs3d)
 		goto failed;
+#endif
 	argv += opt_info.index;
 	argc -= opt_info.index;
 	switch(argc)
@@ -570,22 +576,15 @@ int	b_universe(int argc, char *argv[],void *extra)
 			errormsg(SH_DICT,ERROR_usage(2),"%s",optusage((char*)0));
 		/*FALLTHROUGH*/
 	     case 2:
-		if(!shp->lim.fs3d)
-			goto failed;
 		if(shp->subshell && !shp->subshare)
 			sh_subfork();
  		for(n=0;n<argc;n+=2)
-		{
 			if(mount(argv[n+1],argv[n],flag,0)<0)
 				goto failed;
-		}
 	}
 	return(0);
 failed:
-	if(argc>1)
-		errormsg(SH_DICT,ERROR_exit(1),e_cantset,flag==2?e_mapping:e_versions);
-	else
-		errormsg(SH_DICT,ERROR_exit(1),e_cantget,flag==2?e_mapping:e_versions);
+	errormsg(SH_DICT,ERROR_exit(1),(argc>1)?e_cantset:e_cantget,(flag&FS3D_VIEW)?e_mapping:e_versions);
 	return(1);
     }
 #endif /* SHOPT_FS_3D */

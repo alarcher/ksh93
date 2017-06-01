@@ -1,10 +1,11 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN" "http://www.w3.org/TR/REC-html40/loose.dtd">
 <HTML>
 <HEAD>
-<META name="generator" content="mm2html (AT&T Research) 2010-02-02">
+<META name="generator" content="mm2html (AT&T Research) 2010-09-10">
 <META name="description" content="INIT package">
 <META name="keywords" content="software, package">
 <TITLE> INIT package </TITLE>
+<META name="author" content="gsf+dgk+kpv">
 </HEAD>
 <BODY bgcolor=white link=slateblue vlink=teal >
 <TABLE border=0 align=center width=96%>
@@ -19,7 +20,7 @@ source packages, and generates new package tarballs.
 Components in this package:
 <P>
 <P></P><TABLE border=0 frame=void rules=none width=100%><TBODY><TR><TD>
-<TABLE align=center border=0 bordercolor=white cellpadding=0 cellspacing=0 frame=void rules=none width=99% >
+<TABLE align=center bgcolor=papayawhip border=0 bordercolor=white cellpadding=2 cellspacing=2 width=99% >
 <TBODY>
 <TR><TD align=left>
 INIT</TD></TR>
@@ -47,6 +48,36 @@ All recorded changes follow.
 <P><HR><CENTER><FONT color=red><FONT face=courier><H3><A name="INIT changes">INIT changes</A></H3></FONT></FONT></CENTER>
 <PRE>
 
+11-02-02 Makefile: add :MAPLIB: check for ancient -lw
+11-02-02 make.probe: handle -print-multi-directory =&gt; 64 =&gt; /usr/lib64 /lib64
+11-02-02 package.sh: HOSTTYPE=*,*cc*&#0091;,-*,...&#0093; sets CC &#0091; and CCFLAGS &#0093;
+11-02-02 make.probe: handle gcc $ORIGIN link but exec failure -- gee thanks
+11-01-25 cc.hp.ia64: bundled cc is a pile of shaving cream
+11-01-07 iffe.sh: check debug==3 for is_hdr() failure
+10-11-22 ditto.sh: fix timing problem between |&amp; and exec &amp;p
+10-11-10 package.sh: fix cc cross compile check to use checkcc absolute path
+10-10-10 package.sh: list main env vars at start of make action
+10-10-10 ratz.c: tweak widnows delays
+10-09-10 ratz.c: add _SEAR_ARGS for _SEAR_EXEC
+10-09-01 package.sh: fix ratz from source logic
+10-08-25 package.mk: consolidate license file search in .package.licenses.
+10-08-22 ratz.c: run sear bootstrap command detached
+10-08-20 C+probe: version_stamp only if version_flags works
+10-08-17 package.sh: unset makerules *DIR variables in env
+10-08-15 package.sh: "make" action now lists some env values
+10-08-11 mktest.sh: add "DO command ..."
+10-07-27 rt.sh: handle "rt X=Y ..."
+10-06-29 ratz.c: non-option sear args passed to sear_exec()
+10-06-25 iffe.sh: "api" op chanegd to not do "map-libc" type mappings
+10-06-25 package.sh: "force admin ditto" =&gt; no ditto --update option
+10-06-22 C+probe: handle cc that require .&#0091;ci&#0093; input for version info
+10-06-21 ditto.sh: change default remote access to ssh (about time)
+10-06-12 regress.sh: DISGNOSTICS &#0091; 1 | 0 | pattern &#0093; and fix EXIT for all
+10-06-09 package.sh: add AT&amp;T to usable nmake check
+10-06-06 iffe.sh,iffe.tst: add { api ver } ops
+10-04-22 package.sh: update "html binary|source" NAME/PASSWORD info
+10-04-15 iffe.sh: don't forget candidate headers for hdr|sys!
+10-04-11 WWW.mk: disable man page metarule -- now done by admin-man(1)
 10-02-14 package.sh: $CC verification needs $INSTALLROOT/bin in PATH
 10-02-11 package.sh: fix package admin make report error count
 10-02-02 package.sh: fix write binary bug that did scp on local fs
@@ -336,7 +367,7 @@ All recorded changes follow.
 	 package.mk: add mamfile=0 to inhibit Mamfile generation
 	 iffe.sh: config name_DECLARED =&gt; HAVE_name_DECL
 	 iffe.sh: fix mac to handle default value
-04-04-11 iffe.sh: normalize sed &#0091;\/&#0093; quoting
+04-04-11 iffe.sh: normalize sed &#0091;\\\\/&#0093; quoting
 04-04-04 package.mk: only checksum generated tarballs
 	 mamprobe.sh: add STDCHMOD
 04-04-01 C+probe: set export LANG=C for uniform error messages
@@ -499,7 +530,7 @@ All recorded changes follow.
 02-10-18 probe.win32: update for mingw
 	 make.probe: add bash workaround to SHELLMAGIC test
 	 package.sh: work around yet another cygwin hassle
-02-10-17 iffe.sh: short circuit id check for *&#0091;-+/#0093;*
+02-10-17 iffe.sh: short circuit id check for *&#0091;-+/\\&#0093;*
 02-10-08 regress.sh: unset FIGNORE to avoid rm . errors
 	 package.sh: unset FIGNORE to avoid rm . errors
 	 package.sh: $CC must at least compile and executable hello world
@@ -910,7 +941,7 @@ All recorded changes follow.
 <TR>
 <TD align=left></TD>
 <TD align=center></TD>
-<TD align=right>March 09, 2010</TD>
+<TD align=right>February 09, 2011</TD>
 </TR>
 </TABLE>
 <P>

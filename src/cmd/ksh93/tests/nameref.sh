@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -258,10 +258,17 @@ i=$($SHELL -c 'nameref foo=bar; bar[2]=(x=3 y=4); nameref x=foo[2].y;print -r --
 #set -x
 for c in '=' '[' ']' '\' "'" '"' '<' '=' '('
 do	[[ $($SHELL 2> /dev/null <<- ++EOF++
-	x;i=\\$c;typeset -A a; a[\$i]=foo;typeset -n x=a[\$i]; print "\$x"
+	i=\\$c;typeset -A a; a[\$i]=foo;typeset -n x=a[\$i]; print "\$x"
 	++EOF++
-) != foo ]] && err_exit 'nameref x=[$c] '"not working for c=$c"
+) != foo ]] && err_exit 'nameref x=a[$c] '"not working for c=$c"
 done
+for c in '=' '[' ']' '\' "'" '"' '<' '=' '('
+do      [[ $($SHELL 2> /dev/null <<- ++EOF++
+	i=\\$c;typeset -A a; a[\$i]=foo;b=a[\$i];typeset -n x=\$b; print "\$x"
+	++EOF++
+) != foo ]] && err_exit 'nameref x=$b with b=a[$c] '"not working for c=$c"
+done
+
 unset -n foo x
 unset foo x
 typeset -A foo
@@ -362,4 +369,128 @@ nameref sp=addrsp
 sp[14]=( size=1 )
 [[ -v sp[19] ]]  && err_exit '[[ -v sp[19] ]] where sp is a nameref should not be set'
 
-exit $((Errors))
+function fun2
+{
+	nameref var=$1
+	var.foo=bar
+}
+
+function fun1
+{
+	compound -S container
+	fun2 container
+	[[ $container == *foo=bar* ]] || err_exit 'name references to static compound variables in parent scope not working'
+}
+fun1
+
+function fun2
+{
+	nameref var=$1
+	var.foo=bar
+}
+
+typeset -T container_t=(
+	typeset foo
+)
+
+function fun1
+{
+	container_t -S container
+	fun2 container 
+	[[ $container == *foo=bar* ]] || err_exit 'name references to static type variables in parent scope not working'
+}
+fun1
+
+function fun2
+{
+	nameref var=$1
+	nameref node=var.foo
+	node=bar
+}
+function fun3
+{
+       fun2 container #2> /dev/null
+}
+compound container
+fun3
+[[ $container == *foo=bar* ]] || err_exit 'name reference to a name reference variable in a function not working'
+
+typeset -A x=( [a]=1 ) 
+nameref c=x[h]
+[[ -v x[h] ]] && err_exit 'creating reference to non-existant associative array element causes element to get added'
+
+unset a
+function x
+{
+	nameref a=a
+	(( $# > 0 )) && typeset -A a
+	a[a b]=${1-99}  # this was cauing a syntax on the second call
+}
+x 7
+x 2> /dev/null
+[[ ${a[a b]} == 99 ]] || err_exit 'nameref not handling subscript correctly'
+
+nameref sizes=baz
+typeset -A -i sizes
+sizes[bar]=1
+[[ ${sizes[*]} == 1 ]] || err_exit 'adding -Ai attribute to name referenced variable not working'
+
+$SHELL 2> /dev/null -c 'nameref foo=bar; typeset -A foo; (( (x=foo[a])==0 ))' || err_exit 'references inside arithmetic expressions not working'
+:
+
+unset ar z
+integer -a ar
+nameref z=ar[0]
+(( z[2]=3))
+[[ ${ar[0][2]} == 3 ]] || err_exit "\${ar[0][2]} is '${ar[0][2]}' but should be 3"
+(( ar[0][2] == 3 )) || err_exit "ar[0][2] is '${ar[0][2]}' but should be 3"
+
+unset c x
+typeset +n c x
+compound c=( typeset -a x )  
+nameref x=c.x
+x[4]=1
+[[ ${ typeset -p c.x ;} == *-C* ]] && err_exit 'c.x should not have -C attributes'
+
+{ $SHELL 2> /dev/null  <<- \EOF 
+	typeset -T xxx_t=(
+		float x=1 y=2
+		typeset name=abc
+	)
+	xxx_t x
+	nameref r=x.y
+	[[ $r == 2 ]] || exit 1
+	unset x
+	[[ ${!r} == .deleted ]] || exit 2
+EOF
+} 2> /dev/null #|| print -u2 bad
+exitval=$?
+if	[[ $(kill -l $exitval) == SEGV ]]
+then	print -u2 'name reference to unset type instance causes segmentation violation'
+else 	if((exitval))
+	then	print -u2 'name reference to unset type instance not redirected to .deleted'
+	fi
+fi
+
+typeset +n nr
+unset c nr
+compound c
+compound -A c.a 
+nameref nr=c.a[hello]
+[[ ${!nr} == "c.a[hello]" ]] || err_exit 'name reference nr to unset associative array instance does not expand ${!nr} correctly.'
+
+typeset +n nr
+compound -a c.b 
+nameref nr=c.b[2]
+[[ ${!nr} == "c.b[2]" ]] || err_exit 'name reference nr to unset indexed array instance does not expand ${!nr} correctly.'
+
+typeset +n a b
+unset a b
+typeset -n a=ls[0] b=ls[1]
+read line << \!
+3 4
+!
+set -A ls -- $line
+[[ $a == 3 ]] || err_exit 'name reference to ls[0] when ls is not an array fails'
+
+exit $((Errors<125?Errors:125))

@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -498,4 +498,68 @@ x[2]=
 z=$(: ${x[1]} )
 [[ $z == sub=1 ]] || err_exit 'get function not invoked for associative array'
 
-exit $((Errors))
+unset y
+i=1
+a=(11 22)
+typeset -m y=a[i]
+[[ $y == 22 ]] || err_exit 'typeset -m for index array not working'
+[[ ${a[i]} || ${a[0]} != 11 ]] && err_exit 'typeset -m for index array not deleting element'
+
+unset y
+a=([0]=11 [1]=22)
+typeset -m y=a[$i]
+[[ $y == 22 ]] || err_exit 'typeset -m for associative array not working'
+[[ ${a[$i]} || ${a[0]} != 11 ]] && err_exit 'typeset -m for associative array not deleting element'
+unset x a j
+
+typeset -a a=( [0]="aa" [1]="bb" [2]="cc" )
+typeset -m 'j=a[0]'
+typeset -m 'a[0]=a[1]'
+typeset -m 'a[1]=j'
+[[ ${a[@]} == 'bb aa cc' ]] || err_exit 'moving index array elements not working'
+unset a j
+
+typeset -A a=( [0]="aa" [1]="bb" [2]="cc" )
+typeset -m 'j=a[0]'
+typeset -m 'a[0]=a[1]'
+typeset -m 'a[1]=j'
+[[ ${a[@]} == 'bb aa cc' ]] || err_exit 'moving associative array elements not working'
+unset a j
+
+z=(a b c)
+unset x
+typeset -m x[1]=z
+[[ ${x[1][@]} == 'a b c' ]] || err_exit 'moving indexed array to index array element not working'
+
+unset x z
+z=([0]=a [1]=b [2]=c)
+typeset -m x[1]=z
+[[ ${x[1][@]} == 'a b c' ]] || err_exit 'moving associative array to index array element not working'
+
+{
+typeset -a arr=(
+	float
+)
+} 2> /dev/null
+[[ ${arr[0]} == float ]] || err_exit 'typeset -a should not expand alias for float'
+unset arr
+
+{
+typeset -r -a arr=(
+	float
+)
+} 2> /dev/null
+[[ ${arr[0]} == float ]] || err_exit 'typeset -r -a should not expand alias for float'
+{
+typeset -a arr2=(
+	typeset +r
+)
+} 2> /dev/null
+[[ ${arr2[0]} == typeset ]] || err_exit 'typeset -a should not process declarations'
+unset arr2
+
+$SHELL 2> /dev/null -c $'typeset -a arr=(\nfor)' || err_exit 'typeset -a should allow reserved words as first argument'
+
+$SHELL 2> /dev/null -c $'typeset -r -a arr=(\nfor)' || err_exit 'typeset -r -a should allow reserved words as first argument'
+
+exit $((Errors<125?Errors:125))

@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -1045,6 +1045,11 @@ foo
 	foobar
 ++++
 ) == foo ]] > /dev/null  || err_exit 'functions compiled with shcomp not working'
+# tests for compiled . scripts
+print $'print hello\nprint world' > $tmp/foo
+${SHCOMP:-${SHELL%/*}/shcomp} $tmp/foo > $tmp/foo.sh
+val=$(. $tmp/foo.sh)
+[[ $val ==  $'hello\nworld' ]] || err_exit "processing compiled dot files not working correctly val=$val"
 # test for functions in shell having side effects.
 unset -f foo foobar bar
 cd "$tmp"
@@ -1091,6 +1096,28 @@ function B
 }
             
 x=$(B)      
-[[ $x == $'TRAP A\nTRAP B' ]] || err_exit "trap from funtions in subshells fails got" $x
+[[ $x == $'TRAP A\nTRAP B' ]] || err_exit "trap from functions in subshells fails got" $x
 
-exit $((Errors))
+function foo
+{
+	typeset bar=abc
+	unset bar
+#	[[ $bar == bam ]] || err_exit 'unsetting local variable does not expose global variable'
+	[[ $bar ]] && err_exit 'unsetting local variable exposes global variable'
+}
+bar=bam
+foo
+
+sleep=$(whence -p sleep)
+function gosleep
+{
+	$sleep 4
+}
+x=$(
+	(sleep 2; pid=; ps | grep sleep | read pid extra; [[ $pid ]] && kill -- $pid) &
+	gosleep 2> /dev/null
+	print ok
+)
+[[ $x == ok ]] || err_exit 'TERM signal sent to last process of function kills the script'
+
+exit $((Errors<125?Errors:125))

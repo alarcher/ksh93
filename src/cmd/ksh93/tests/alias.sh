@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -96,4 +96,7 @@ else	err_exit 'hash -r failed'
 fi
 ( alias :pr=print) 2> /dev/null || err_exit 'alias beginning with : fails'
 ( alias p:r=print) 2> /dev/null || err_exit 'alias with : in name fails'
-exit $((Errors))
+
+unalias no_such_alias &&  err_exit 'unalias should return non-zero for unknown alias'
+
+exit $((Errors<125?Errors:125))

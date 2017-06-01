@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -181,7 +181,7 @@ int    b_print(int argc, char *argv[], void *extra)
 			/* print to history file */
 			if(!sh_histinit((void*)shp))
 				errormsg(SH_DICT,ERROR_system(1),e_history);
-			fd = sffileno(shp->hist_ptr->histfp);
+			fd = sffileno(shp->gd->hist_ptr->histfp);
 			sh_onstate(SH_HISTORY);
 			sflag++;
 			break;
@@ -195,9 +195,9 @@ int    b_print(int argc, char *argv[], void *extra)
 			fd = (int)strtol(opt_info.arg,&opt_info.arg,10);
 			if(*opt_info.arg)
 				fd = -1;
-			else if(fd<0 || fd >= shp->lim.open_max)
+			else if(!sh_iovalidfd(shp,fd))
 				fd = -1;
-			else if(!(sh.inuse_bits&(1<<fd)) && (sh_inuse(fd) || (shp->hist_ptr && fd==sffileno(shp->hist_ptr->histfp))))
+			else if(!(shp->inuse_bits&(1<<fd)) && (sh_inuse(shp,fd) || (shp->gd->hist_ptr && fd==sffileno(shp->gd->hist_ptr->histfp))))
 
 				fd = -1;
 			break;
@@ -314,12 +314,12 @@ skip2:
 		/* echo style print */
 		if(nflag && !argv[0])
 			sfsync((Sfio_t*)0);
-		else if(sh_echolist(outfile,rflag,argv) && !nflag)
+		else if(sh_echolist(shp,outfile,rflag,argv) && !nflag)
 			sfputc(outfile,'\n');
 	}
 	if(sflag)
 	{
-		hist_flush(shp->hist_ptr);
+		hist_flush(shp->gd->hist_ptr);
 		sh_offstate(SH_HISTORY);
 	}
 	else if(n&SF_SHARE)
@@ -336,7 +336,7 @@ skip2:
  * returns 0 for \c otherwise 1.
  */
 
-int sh_echolist(Sfio_t *outfile, int raw, char *argv[])
+int sh_echolist(Shell_t *shp,Sfio_t *outfile, int raw, char *argv[])
 {
 	register char	*cp;
 	register int	n;
@@ -354,7 +354,7 @@ int sh_echolist(Sfio_t *outfile, int raw, char *argv[])
 			sfputr(outfile,cp,-1);
 		if(*argv)
 			sfputc(outfile,' ');
-		sh_sigcheck();
+		sh_sigcheck(shp);
 	}
 	return(!pdata.cescape);
 }
@@ -368,6 +368,9 @@ static char strformat(char *s)
         register int    c;
         char*           b;
         char*           p;
+#if SHOPT_MULTIBYTE && defined(FMT_EXP_WIDE)
+	int		w;
+#endif
 
         b = t = s;
         for (;;)
@@ -377,14 +380,26 @@ static char strformat(char *s)
                     case '\\':
 			if(*s==0)
 				break;
+#if SHOPT_MULTIBYTE && defined(FMT_EXP_WIDE)
+                        c = chrexp(s - 1, &p, &w, FMT_EXP_CHAR|FMT_EXP_LINE|FMT_EXP_WIDE);
+#else
                         c = chresc(s - 1, &p);
+#endif
                         s = p;
 #if SHOPT_MULTIBYTE
-			if(c>UCHAR_MAX && mbwide())
+#if defined(FMT_EXP_WIDE)
+			if(w)
 			{
-				t += wctomb(t, c);
+				t += mbwide() ? mbconv(t, c) : wc2utf8(t, c);
 				continue;
 			}
+#else
+			if(c>UCHAR_MAX && mbwide())
+			{
+				t += mbconv(t, c);
+				continue;
+			}
+#endif /* FMT_EXP_WIDE */
 #endif /* SHOPT_MULTIBYTE */
 			if(c=='%')
 				*t++ = '%';
@@ -459,6 +474,7 @@ static void *fmtbase64(char *string, ssize_t *sz, int alt)
 	Sfdouble_t		d;
 	ssize_t			size;
 	Namval_t		*np = nv_open(string, NiL, NV_VARNAME|NV_NOASSIGN|NV_NOADD);
+	Namarr_t		*ap;
 	static union types_t	number;
 	if(!np || nv_isnull(np))
 	{
@@ -541,7 +557,7 @@ static void *fmtbase64(char *string, ssize_t *sz, int alt)
 			return(n?n:size);
 		}
 	}
-	else if(nv_isarray(np) && nv_arrayptr(np))
+	else if(nv_isarray(np) && (ap=nv_arrayptr(np)) && (ap->nelem&(ARRAY_UNDEF|ARRAY_SCAN)))
 	{
 		nv_outnode(np,iop,(alt?-1:0),0);
 		sfputc(iop,')');
@@ -551,7 +567,12 @@ static void *fmtbase64(char *string, ssize_t *sz, int alt)
 	{
 		if(alt && nv_isvtree(np))
 			nv_onattr(np,NV_EXPORT);
-		if(!(cp = nv_getval(np)))
+		else
+			alt = 0;
+		cp = nv_getval(np);
+		if(alt)
+			nv_offattr(np,NV_EXPORT);
+		if(!cp)
 			return(0);
 		size = strlen(cp);
 		return(sfwrite(iop,cp,size));
@@ -607,6 +628,7 @@ static int extend(Sfio_t* sp, void* v, Sffmt_t* fe)
 	int		fold = fe->base;
 	union types_t*	value = (union types_t*)v;
 	struct printf*	pp = (struct printf*)fe;
+	Shell_t		*shp = pp->sh;
 	register char*	argp = *pp->nextarg;
 	char*		w;
 
@@ -690,8 +712,8 @@ static int extend(Sfio_t* sp, void* v, Sffmt_t* fe)
 		case 'n':
 		{
 			Namval_t *np;
-			np = nv_open(argp,sh.var_tree,NV_VARNAME|NV_NOASSIGN|NV_NOARRAY);
-			nv_unset(np);
+			np = nv_open(argp,shp->var_tree,NV_VARNAME|NV_NOASSIGN|NV_NOARRAY);
+			_nv_unset(np,0);
 			nv_onattr(np,NV_INTEGER);
 			if (np->nvalue.lp = new_of(int32_t,0))
 				*np->nvalue.lp = 0;
@@ -869,13 +891,14 @@ static int extend(Sfio_t* sp, void* v, Sffmt_t* fe)
 				return -1;
 			}
 			value->s = stakptr(staktell());
+			fe->size = n;
 		}
 		break;
 	case 'B':
-		if(!sh.strbuf2)
-			sh.strbuf2 = sfstropen();
-		fe->size = fmtbase64(sh.strbuf2,value->s, fe->flags&SFFMT_ALTER);
-		value->s = sfstruse(sh.strbuf2);
+		if(!shp->strbuf2)
+			shp->strbuf2 = sfstropen();
+		fe->size = fmtbase64(shp->strbuf2,value->s, fe->flags&SFFMT_ALTER);
+		value->s = sfstruse(shp->strbuf2);
 		fe->flags |= SFFMT_SHORT;
 		break;
 	case 'H':

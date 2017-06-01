@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -214,7 +214,7 @@ static const char sh_lexstate5[256] =
 	S_GRAVE,0,	0,	0,	0,	0,	0,	0,
 	0,	0,	0,	0,	0,	0,	0,	0,
 	0,	0,	0,	0,	0,	0,	0,	0,
-	0,	0,	0,	S_BRACE,S_META,	S_POP,	0,	0
+	0,	0,	0,	S_BRACE,S_META,	S_POP,	S_TILDE,0
 };
 
 /*
@@ -391,6 +391,8 @@ const char e_lexslash[]		= "line %d: $ not preceded by \\";
 const char e_lexsyntax1[]	= "syntax error at line %d: `%s' %s";
 const char e_lexsyntax2[]	= "syntax error: `%s' %s";
 const char e_lexsyntax3[]	= "syntax error at line %d: duplicate label %s";
+const char e_lexsyntax4[]	= "syntax error at line %d: invalid reference list";
+const char e_lexwarnvar[]	= "line %d: variable expansion makes arithmetic evaluation less efficient";
 const char e_lexlabignore[]	= "line %d: label %s ignored";
 const char e_lexlabunknown[]	= "line %d: %s unknown label";
 const char e_lexobsolete1[]	= "line %d: `...` obsolete, use $(...)";
@@ -411,3 +413,4 @@ const char e_lexlongquote[]	= "line %d: %c quote may be missing";
 const char e_lexzerobyte[]	= "zero byte";
 const char e_lexemptyfor[]	= "line %d: empty for list";
 const char e_lextypeset[]	= "line %d: %s invalid typeset option order";
+const char e_lexcharclass[]	= "line %d: '^' as first character in character class not portable";

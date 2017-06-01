@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -157,6 +157,7 @@ extern char*		strerror(int);
 #define AST_LC_LANG		255
 
 #define AST_LC_internal		1
+#define AST_LC_test		(1L<<26)
 #define AST_LC_setenv		(1L<<27)
 #define AST_LC_find		(1L<<28)
 #define AST_LC_debug		(1L<<29)
@@ -251,7 +252,9 @@ typedef struct
 	uint32_t	mb_sync;
 	uint32_t	version;
 
-	char		pad[936];
+	int		(*mb_alpha)(wchar_t);
+
+	char		pad[936 - sizeof(void*)];
 
 } _Ast_info_t;
 

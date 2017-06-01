@@ -28,7 +28,7 @@ DEBUG ==
 __OBSOLETE__ == $("6 months ago":@F=%(%Y0101)T)
 
 HEADERSRC = ast.h ast_dir.h ast_getopt.h ast_std.h \
-	ast_namval.h ast_version.h ast_windows.h \
+	ast_namval.h ast_windows.h \
 	ccode.h cdt.h cmdarg.h debug.h dt.h error.h find.h ftw.h ftwalk.h \
 	fts.h fs3d.h getopt.h glob.h hash.h hashkey.h hashpart.h ip6.h \
 	lc.h ls.h magic.h mc.h mime.h mnt.h modecanon.h modex.h namval.h \
@@ -40,17 +40,17 @@ HEADERSRC = ast.h ast_dir.h ast_getopt.h ast_std.h \
 	$(HEADERSTD)
 
 HEADERGEN = align.h preroot.h sig.h tmx.h tv.h \
-	$(ID)_botch.h $(ID)_ccode.h $(ID)_fcntl.h $(ID)_float.h $(ID)_fs.h \
-	$(ID)_lib.h $(ID)_map.h $(ID)_mmap.h $(ID)_mode.h $(ID)_ndbm.h \
+	$(ID)_api.h $(ID)_botch.h $(ID)_ccode.h $(ID)_fcntl.h $(ID)_float.h \
+	$(ID)_fs.h $(ID)_lib.h $(ID)_map.h $(ID)_mmap.h $(ID)_mode.h $(ID)_ndbm.h \
 	$(ID)_param.h $(ID)_sys.h $(ID)_time.h $(ID)_time.h $(ID)_tty.h \
-	$(ID)_vfork.h $(ID)_wait.h $(ID)_limits.h $(ID)_standards.h \
+	$(ID)_vfork.h $(ID)_wait.h $(ID)_limits.h $(ID)_standards.h $(ID)_sizeof.h \
 	$(HEADERSTD:/^/$(ID)_/)
 
 HEADEREXP = $(ID)_common.h
 
 HEADEROPT = fmtmsg.h libgen.h syslog.h
 
-HEADERSTD = dirent.h iconv.h nl_types.h stdio.h wchar.h
+HEADERSTD = dirent.h iconv.h nl_types.h stdio.h wchar.h wctype.h
 
 $(ID) 5.4 :LIBRARY: README RELEASE \
 	LIBAST.3 ast.3 astsa.3 cdt.3 chr.3 compat.3 error.3 find.3 fmt.3 \
@@ -81,7 +81,7 @@ $(ID) 5.4 :LIBRARY: README RELEASE \
 	pathgetlink.c pathsetlink.c pathbin.c pathshell.c pathcd.c \
 	pathprog.c \
 	fs3d.c ftwalk.c ftwflags.c fts.c \
-	astintercept.c getenv.c setenviron.c \
+	astintercept.c conformance.c getenv.c setenviron.c \
 	optget.c optjoin.c optesc.c optctx.c strsort.c struniq.c \
 	magic.c mime.c mimetype.c signal.c sigflag.c systrace.c \
 	error.c errorf.c errormsg.c errorx.c \
@@ -89,7 +89,7 @@ $(ID) 5.4 :LIBRARY: README RELEASE \
 	catopen.c iconv.c lc.c lctab.c mc.c \
 	base64.c recfmt.c recstr.c reclen.c fmtrec.c \
 	fmtbase.c fmtbuf.c fmtclock.c fmtdev.c fmtelapsed.c fmterror.c \
-	fmtesc.c fmtfmt.c fmtfs.c fmtident.c fmtip4.c fmtip6.c fmtls.c \
+	fmtesc.c fmtfmt.c fmtfs.c fmtident.c fmtint.c fmtip4.c fmtip6.c fmtls.c \
 	fmtmatch.c fmtmode.c fmtnum.c fmtperm.c fmtre.c fmttime.c fmtuid.c \
 	fmtgid.c fmtsignal.c fmtscale.c fmttmx.c fmttv.c fmtversion.c \
 	strelapsed.c strperm.c struid.c strgid.c \
@@ -131,7 +131,7 @@ $(ID) 5.4 :LIBRARY: README RELEASE \
 	sfdcdio.c sfdcdos.c sfdcfilter.c sfdcseekable.c \
 	sfdcslow.c sfdcsubstr.c sfdctee.c sfdcunion.c \
 	sfdcmore.c sfdcprefix.c \
-	wc.c \
+	wc.c wc2utf8.c \
 	/* standards */ \
 	basename.c closelog.c dirname.c fmtmsglib.c fnmatch.c ftw.c \
 	getdate.c getsubopt.c glob.c nftw.c openlog.c re_comp.c \
@@ -206,7 +206,7 @@ $(ID) 5.4 :LIBRARY: README RELEASE \
 	log__L.c rand48.c random.c rcmd.c rint.c support.c \
 	/* obsolete */ \
 	sfstrtmp.c spawn.c \
-	-liconv /* this *has* to be wrong */
+	-liconv -lw /* these should be pulled in by -lc */
 
 /*
  * man is stdio.h problematic
@@ -229,7 +229,7 @@ virtual		ast/stdio.h
 
 		:NOOPTIMIZE: spawnveg.c
 "ibm.risc"	:NOOPTIMIZE: regcomp.c
-"sol*.*"	:NOOPTIMIZE: sfrd.c sfvprintf.c tmxfmt.c
+"sol?.*"	:NOOPTIMIZE: sfrd.c sfvprintf.c tmxfmt.c
 "win32*"	:NOOPTIMIZE: fastfind.c mc.c
 
 /*
@@ -330,7 +330,8 @@ FEATURE/common : .SCAN.IGNORE
 
 .check.hdr : .IGNORE .VIRTUAL \
 		FEATURE/standards - FEATURE/lib - FEATURE/common - FEATURE/param - \
-		ast_map.h - ast_limits.h - ast_stdio.h ast_nl_types.h - ast_wchar.h
+		ast_map.h - ast_limits.h - ast_stdio.h ast_nl_types.h - \
+		ast_wchar.h ast_wctype.h
 	: clean up obsolete headers :
 	$(RM) -rf $(HEADERSTD) ast_hdr.h ast_types.h ast_unistd.h iffeio.h \
 		$(INCLUDEDIR)/limits.h $(INCLUDEDIR)/unistd.h \

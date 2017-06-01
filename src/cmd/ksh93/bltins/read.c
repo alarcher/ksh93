@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -125,7 +125,7 @@ int	b_read(int argc,char *argv[], void *extra)
 		break;
 	    case 'u':
 		fd = (int)opt_info.num;
-		if(sh_inuse(fd))
+		if(sh_inuse(shp,fd))
 			fd = -1;
 		break;
 	    case 'v':
@@ -223,6 +223,7 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 	int			jmpval=0;
 	ssize_t			size = 0;
 	int			binary;
+	int			oflags=NV_NOASSIGN|NV_VARNAME;
 	struct	checkpt		buff;
 	if(!(iop=shp->sftable[fd]) && !(iop=sh_iostream(shp,fd)))
 		return(1);
@@ -232,11 +233,13 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 		Namval_t *mp;
 		if(val= strchr(name,'?'))
 			*val = 0;
-		np = nv_open(name,shp->var_tree,NV_NOASSIGN|NV_VARNAME);
+		if(flags&C_FLAG)
+			oflags |= NV_ARRAY;
+		np = nv_open(name,shp->var_tree,oflags);
 		if(np && nv_isarray(np) && (mp=nv_opensub(np)))
 			np = mp;
-		if((flags&V_FLAG) && shp->ed_context)
-			((struct edit*)shp->ed_context)->e_default = np;
+		if((flags&V_FLAG) && shp->gd->ed_context)
+			((struct edit*)shp->gd->ed_context)->e_default = np;
 		if(flags&A_FLAG)
 		{
 			flags &= ~A_FLAG;
@@ -246,8 +249,11 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 		}
 		else if(flags&C_FLAG)
 		{
+			char *sp =  np->nvenv;
 			delim = -1;
 			nv_unset(np);
+			if(!nv_isattr(np,NV_MINIMAL))
+				np->nvenv = sp;
 			nv_setvtree(np);
 		}
 		else
@@ -282,7 +288,8 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 			shp->ifstable['\\'] = 0;
 		else if(!(flags&R_FLAG) && shp->ifstable['\\']==0)
 			shp->ifstable['\\'] = S_ESC;
-		shp->ifstable[delim] = S_NL;
+		if(delim>0)
+			shp->ifstable[delim] = S_NL;
 		if(delim!='\n')
 		{
 			shp->ifstable['\n'] = 0;
@@ -309,7 +316,7 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 		was_share = (sfset(iop,SF_SHARE,1)&SF_SHARE)!=0;
 	if(timeout || (shp->fdstatus[fd]&(IOTTY|IONOSEEK)))
 	{
-		sh_pushcontext(&buff,1);
+		sh_pushcontext(shp,&buff,1);
 		jmpval = sigsetjmp(buff.buff,0);
 		if(jmpval)
 			goto done;
@@ -450,10 +457,10 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 		c = sfvalue(iop)+1;
 	if(timeslot)
 		timerdel(timeslot);
-	if((flags&S_FLAG) && !shp->hist_ptr)
+	if((flags&S_FLAG) && !shp->gd->hist_ptr)
 	{
 		sh_histinit((void*)shp);
-		if(!shp->hist_ptr)
+		if(!shp->gd->hist_ptr)
 			flags &= ~S_FLAG;
 	}
 	if(cp)
@@ -466,7 +473,7 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 		if(*(cpmax-1) != delim)
 			*(cpmax-1) = delim;
 		if(flags&S_FLAG)
-			sfwrite(shp->hist_ptr->histfp,(char*)cp,c);
+			sfwrite(shp->gd->hist_ptr->histfp,(char*)cp,c);
 		c = shp->ifstable[*cp++];
 #if !SHOPT_MULTIBYTE
 		if(!name && (flags&R_FLAG)) /* special case single argument */
@@ -567,7 +574,7 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 				if(cp)
 				{
 					if(flags&S_FLAG)
-						sfwrite(shp->hist_ptr->histfp,(char*)cp,c);
+						sfwrite(shp->gd->hist_ptr->histfp,(char*)cp,c);
 					cpmax = cp + c;
 					c = shp->ifstable[*cp++];
 					val=0;
@@ -687,7 +694,7 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 			if(sh_isoption(SH_ALLEXPORT)&&!strchr(nv_name(np),'.') && !nv_isattr(np,NV_EXPORT))
 			{
 				nv_onattr(np,NV_EXPORT);
-				sh_envput(sh.env,np);
+				sh_envput(shp->env,np);
 			}
 			if(name)
 			{
@@ -712,7 +719,7 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 	}
 done:
 	if(timeout || (shp->fdstatus[fd]&(IOTTY|IONOSEEK)))
-		sh_popcontext(&buff);
+		sh_popcontext(shp,&buff);
 	if(was_write)
 		sfset(iop,SF_WRITE,1);
 	if(!was_share)
@@ -721,7 +728,7 @@ done:
 	if((flags>>D_FLAG) && (shp->fdstatus[fd]&IOTTY))
 		tty_cooked(fd);
 	if(flags&S_FLAG)
-		hist_flush(shp->hist_ptr);
+		hist_flush(shp->gd->hist_ptr);
 	if(jmpval > 1)
 		siglongjmp(*shp->jmplist,jmpval);
 	return(jmpval);

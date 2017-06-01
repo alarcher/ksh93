@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -338,7 +338,7 @@ unset y
 [[ $(let y=$x;print $y) == 10 && $(let y=1$x;print $y) == 1010 ]] || err_exit 'zero filled fields not preserving leading zeros with let'
 unset i ip ipx
 typeset -i hex=( 172 30 18 1)
-typeset -iu ip=0 ipx=0
+typeset -ui ip=0 ipx=0
 integer i
 for	((i=0; i < 4; i++))
 do	(( ip =  (ip<<8) | hex[i]))
@@ -350,7 +350,7 @@ do	(( ipx = ip % 256 ))
 done
 unset x
 x=010
-(( x == 8 )) || err_exit 'leading zeros not treated as octal arithmetic'
+(( x == 10 )) || err_exit 'leading zeros in x treated as octal arithmetic with $((x))'
 (( $x == 8 )) || err_exit 'leading zeros not treated as octal arithmetic with $x'
 unset x
 typeset -Z x=010
@@ -361,7 +361,7 @@ typeset -i i=x
 (( ${x:0:1} == 0 )) || err_exit 'leading zero should not be stripped for x:a:b'
 c010=3
 (( c$x  == 3 )) || err_exit 'leading zero with variable should not be stripped'
-[[ $( ($SHELL -c '((++1))' 2>&1)2>/dev/null ) == *lvalue* ]] || err_exit "((++1)) not generating error message"
+[[ $( ($SHELL -c '((++1))' 2>&1) 2>/dev/null ) == *++1:* ]] || err_exit "((++1)) not generating error message"
 i=2
 (( "22" == 22 )) || err_exit "double quoted constants fail"
 (( "2$i" == 22 )) || err_exit "double quoted variables fail"
@@ -559,4 +559,120 @@ do ((a[RANDOM%2]++))
 done
 (( (a[0]+a[1])==1000)) || err_exit '(a[0]+a[1])!=1000'
 
-exit $((Errors))
+(( 4.**3/10 == 6.4 )) || err_exit '4.**3/10!=6.4'
+(( (.5+3)/7 == .5 )) || err_exit '(.5+3)/7!==.5'
+
+function .sh.math.mysin x
+{
+        ((.sh.value = x - x**3/6. + x**5/120.-x**7/5040. + x**9/362880.))
+}
+
+(( abs(sin(.5)-mysin(.5)) < 1e-6 )) || err_exit 'mysin() not close to sin()'
+
+$SHELL 2> /dev/null  <<- \EOF || err_exit "arithmetic functions defined and referenced in compound command not working"
+{
+	function .sh.math.mysin x
+	{
+	        ((.sh.value = x-x**3/6. + x**5/120.-x**7/5040. + x**9/362880.))
+	}
+	(( abs(sin(.5)-mysin(.5)) < 1e-6 )) 
+	exit 0
+}
+EOF
+
+
+
+function .sh.math.max x y z
+{
+	.sh.value=x
+	(( y > x )) && .sh.value=y
+	(( z > .sh.value )) && .sh.value=z
+}
+(( max(max(3,8,5),7,5)==8)) || err_exit 'max(max(3,8,5),7,5)!=8'
+(( max(max(3,8,5),7,9)==9)) || err_exit 'max(max(3,8,9),7,5)!=9'
+(( max(6,max(3,9,5),7)==9 )) || err_exit 'max(6,max(3,8,5),7)!=9'
+(( max(6,7, max(3,8,5))==8 )) || err_exit 'max(6,7,max(3,8,5))!=8'
+
+enum color_t=(red green blue yellow)
+color_t shirt pants=blue
+(( pants == blue )) || err_exit 'pants should be blue'
+(( shirt == red )) || err_exit 'pants should be red'
+(( shirt != green )) || err_exit 'shirt should not be green'
+(( pants != shirt )) || err_exit 'pants should be the same as shirt'
+(( pants = yellow ))
+(( pants == yellow )) || err_exit 'pants should be yellow'
+
+unset z
+integer -a z=( [1]=90 )
+function x
+{
+	nameref nz=$1
+	float x y
+	float x=$((log10(nz))) y=$((log10($nz)))
+	(( abs(x-y) < 1e-10 )) || err_exit '$nz and nz differs in arithmetic expression when nz is reference to array instance'
+} 
+x z[1]
+
+unset x
+float x
+x=$( ($SHELL -c 'print -- $(( asinh(acosh(atanh(sin(cos(tan(atan(acos(asin(tanh(cosh(sinh(asinh(acosh(atanh(sin(cos(tan(atan(acos(asin(tanh(cosh(sinh(.5)))))))))))))))))))))))) )) ';:) 2> /dev/null)
+(( abs(x-.5) < 1.e-10 )) || err_exit 'bug in composite function evaluation'
+
+unset x
+typeset -X x=16
+{ (( $x == 16 )) ;} 2> /dev/null || err_exit 'expansions of hexfloat not working in arithmetic expansions'
+
+unset foo
+function foobar
+{
+	(( foo = 8))
+}
+typeset -i foo
+foobar
+(( foo == 8 )) || err_exit  'arithmetic assignment binding to the wrong scope'
+
+(( tgamma(4)/12 )) || err_exit 'floating point attribute for functions not preserved'  
+
+unset F
+function f
+{
+ ((F=1))
+}
+f
+[[ $F == 1 ]] || err_exit 'scoping bug with arithmetic expression'
+
+F=1
+function f
+{
+ typeset F
+ ((F=2))
+}
+[[ $F == 1 ]] || err_exit 'scoping bug2 with arithmetic expression'
+
+unset play foo x z
+typeset -A play
+x=foo
+play[$x]=(x=2)
+for ((i=0; i < 2; i++))
+do	(( play[$x].y , z++  ))
+done
+(( z==2 )) || err_exit 'unset compound array variable error with for loop optimization'
+
+[[ $($SHELL 2> /dev/null -c 'print -- $(( ldexp(1, 4) ))' ) == 16 ]] || err_exit 'function ldexp not implement or not working correctly'
+
+
+$SHELL 2> /dev/null -c 'str="0x1.df768ed398ee1e01329a130627ae0000p-1";typeset -l -E x;((x=str))' || err_exit '((x=var)) fails for hexfloat with var begining with 0x1.nnn'
+
+x=(3 6 12)
+(( x[2] /= x[0]))
+(( x[2] == 4 ))  || err_exit '(( x[2] /= x[0])) fails for index array'
+
+x=([0]=3 [1]=6 [2]=12)
+(( x[2] /= x[0]))
+(( x[2] == 4 )) || err_exit '(( x[2] /= x[0])) fails for associative array'
+
+got=$($SHELL 2> /dev/null -c 'compound -a x;compound -a x[0].y; integer -a x[0].y[0].z; (( x[0].y[0].z[2]=3 )); typeset -p x')
+exp='typeset -C -a x=((typeset -C -a y=( [0]=(typeset -a -l -i z=([2]=3);));))'
+[[ $got == "$exp" ]] || err_exit '(( x[0].y[0].z[2]=3 )) not working'
+
+exit $((Errors<125?Errors:125))

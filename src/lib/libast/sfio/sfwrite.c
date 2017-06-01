@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -135,7 +135,7 @@ size_t		n;	/* number of bytes. 		*/
 				w = (ssize_t)n;
 			if(w <= 0) /* no forward progress possible */
 				break;
-			memcpy(f->next, s, w);
+			memmove(f->next, s, w);
 			f->next += w;
 		}
 

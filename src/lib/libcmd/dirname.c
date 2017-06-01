@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1992-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1992-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -98,28 +98,31 @@ static void l_dirname(register Sfio_t *outfile, register const char *pathname)
 int
 b_dirname(int argc,register char *argv[], void* context)
 {
-	register int n;
-	int mode = 0;
-	char buf[PATH_MAX];
+	int	mode = 0;
+	char	buf[PATH_MAX];
 
 	cmdinit(argc, argv, context, ERROR_CATALOG, 0);
-	while (n = optget(argv, usage)) switch (n)
+	for (;;)
 	{
-	case 'f':
-		mode |= PATH_REGULAR;
-		break;
-	case 'r':
-		mode &= ~PATH_REGULAR;
-		mode |= PATH_READ;
-		break;
-	case 'x':
-		mode |= PATH_EXECUTE;
-		break;
-	case ':':
-		error(2, "%s", opt_info.arg);
-		break;
-	case '?':
-		error(ERROR_usage(2), "%s", opt_info.arg);
+		switch (optget(argv, usage))
+		{
+		case 'f':
+			mode |= PATH_REGULAR;
+			continue;
+		case 'r':
+			mode &= ~PATH_REGULAR;
+			mode |= PATH_READ;
+			continue;
+		case 'x':
+			mode |= PATH_EXECUTE;
+			continue;
+		case ':':
+			error(2, "%s", opt_info.arg);
+			break;
+		case '?':
+			error(ERROR_usage(2), "%s", opt_info.arg);
+			break;
+		}
 		break;
 	}
 	argv += opt_info.index;
@@ -128,9 +131,9 @@ b_dirname(int argc,register char *argv[], void* context)
 		error(ERROR_usage(2),"%s", optusage(NiL));
 	if(!mode)
 		l_dirname(sfstdout,argv[0]);
-	else if(pathpath(buf, argv[0], "", mode))
+	else if(pathpath(argv[0], "", mode, buf, sizeof(buf)))
 		sfputr(sfstdout, buf, '\n');
 	else
 		error(1|ERROR_WARNING, "%s: relative path not found", argv[0]);
-	return(0);
+	return 0;
 }

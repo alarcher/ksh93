@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -254,6 +254,7 @@ eval "$x"
 x=${x//$'\t'}
 x=${x//$'(\n'/'('}
 x=${x//$'\n'/';'}
+x=${x%';)'}')'
 [[ $(typeset -p z) == "$x" ]] || err_exit "typeset -p for '$x' failed"
 [[ $(typeset +p z) == "${x%%=*}" ]] || err_exit "typeset +p for '$x' failed"
 unset z
@@ -276,6 +277,7 @@ Pt_t z
 x=${z//$'\t'}
 x=${x//$'(\n'/'('}
 x=${x//$'\n'/';'}
+x=${x%';)'}')'
 [[ $(typeset -p z) == "Pt_t z=$x" ]] || err_exit "typeset -p for type failed"
 [[ $(typeset +p z) == "Pt_t z" ]] || err_exit "typeset +p for type failed"
 unset z
@@ -360,4 +362,37 @@ unset v
 typeset -H v=/dev/null
 [[ $v == *nul* ]] || err_exit 'typeset -H for /dev/null not working'
 
-exit	$((Errors))
+unset x
+(typeset +C x) 2> /dev/null && err_exit 'typeset +C should be an error' 
+(typeset +A x) 2> /dev/null && err_exit 'typeset +A should be an error' 
+(typeset +a x) 2> /dev/null && err_exit 'typeset +a should be an error' 
+
+unset x
+{
+x=$($SHELL -c 'integer -s x=5;print -r -- $x')
+} 2> /dev/null
+[[ $x == 5 ]] || err_exit 'integer -s not working'
+
+[[ $(typeset -l) == *namespace*.sh* ]] && err_exit 'typeset -l should not contain namespace .sh'
+
+unset got
+typeset -u got
+exp=100
+((got=$exp))
+[[ $got == $exp ]] || err_exit "typeset -l fails on numeric value -- expected '$exp', got '$got'"
+
+unset s
+typeset -a -u s=( hello world chicken )
+[[ ${s[2]} == CHICKEN ]] || err_exit 'typeset -u not working with indexed arrays'
+unset s
+typeset -A -u s=( [1]=hello [0]=world [2]=chicken )
+[[ ${s[2]} == CHICKEN ]] || err_exit 'typeset -u not working with associative arrays'
+expected=$'(\n\t[0]=WORLD\n\t[1]=HELLO\n\t[2]=CHICKEN\n)'
+[[ $(print -v s) == "$expected" ]] || err_exit 'typeset -u for associative array does not display correctly'
+
+unset s
+if	command typeset -M totitle s 2> /dev/null
+then	[[ $(typeset +p s) == 'typeset -M totitle s' ]] || err_exit 'typeset -M totitle does not display correctly with typeset -p'
+fi
+
+exit $((Errors<125?Errors:125))

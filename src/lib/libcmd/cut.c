@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1992-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1992-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -27,7 +27,7 @@
  */
 
 static const char usage[] =
-"[-?\n@(#)$Id: cut (AT&T Research) 2009-12-04 $\n]"
+"[-?\n@(#)$Id: cut (AT&T Research) 2010-08-11 $\n]"
 USAGE_LICENSE
 "[+NAME?cut - cut out selected columns or fields of each line of a file]"
 "[+DESCRIPTION?\bcut\b bytes, characters, or character-delimited fields "
@@ -112,8 +112,6 @@ typedef struct Cut_s
 #define SP_LINE		1
 #define SP_WORD		2
 #define SP_WIDE		3
-
-#define mb2wc(w,p,n)	(*ast.mb_towc)(&w,(char*)p,n)
 
 /*
  * compare the first of an array of integers
@@ -289,7 +287,7 @@ cutcols(Cut_t* cut, Sfio_t* fdin, Sfio_t* fdout)
 				{
 					if (!(*s & 0x80))
 						z = 1;
-					else if ((z = mblen(s, w)) <= 0)
+					else if ((z = mbnsize(s, w)) <= 0)
 					{
 						if (s == bp && xx)
 						{
@@ -319,7 +317,7 @@ cutcols(Cut_t* cut, Sfio_t* fdin, Sfio_t* fdout)
 				while (w > 0 && ncol > 0)
 				{
 					ncol--;
-					if (!(*s & 0x80) || (z = mblen(s, w)) <= 0)
+					if (!(*s & 0x80) || (z = mbnsize(s, w)) <= 0)
 						z = 1;
 					s += z;
 					w -= z;
@@ -588,7 +586,7 @@ b_cut(int argc, char** argv, void* context)
 	wdelim.len = ldelim.len = 1;
 	for (;;)
 	{
-		switch (n = optget(argv, usage))
+		switch (optget(argv, usage))
 		{
 		case 0:
 			break;
@@ -600,7 +598,7 @@ b_cut(int argc, char** argv, void* context)
 				continue;
 			}
 			cp = opt_info.arg;
-			if(n=='b')
+			if(opt_info.option[1]=='b')
 				mode |= C_BYTES;
 			else
 				mode |= C_CHARS;

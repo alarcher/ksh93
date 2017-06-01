@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -34,13 +34,13 @@ trap "cd /; rm -rf $tmp" EXIT
 # test shell builtin commands
 builtin getconf
 : ${foo=bar} || err_exit ": failed"
-[[ $foo = bar ]] || err_exit ": side effects failed"
+[[ $foo == bar ]] || err_exit ": side effects failed"
 set -- - foobar
-[[ $# = 2 && $1 = - && $2 = foobar ]] || err_exit "set -- - foobar failed"
+[[ $# == 2 && $1 == - && $2 == foobar ]] || err_exit "set -- - foobar failed"
 set -- -x foobar
-[[ $# = 2 && $1 = -x && $2 = foobar ]] || err_exit "set -- -x foobar failed"
+[[ $# == 2 && $1 == -x && $2 == foobar ]] || err_exit "set -- -x foobar failed"
 getopts :x: foo || err_exit "getopts :x: returns false"
-[[ $foo = x && $OPTARG = foobar ]] || err_exit "getopts :x: failed"
+[[ $foo == x && $OPTARG == foobar ]] || err_exit "getopts :x: failed"
 OPTIND=1
 getopts :r:s var -r
 if	[[ $var != : || $OPTARG != r ]]
@@ -74,7 +74,7 @@ false ${foo=bar} &&  err_exit "false failed"
 read <<!
 hello world
 !
-[[ $REPLY = 'hello world' ]] || err_exit "read builtin failed"
+[[ $REPLY == 'hello world' ]] || err_exit "read builtin failed"
 print x:y | IFS=: read a b
 if	[[ $a != x ]]
 then	err_exit "IFS=: read ... not working"
@@ -83,11 +83,11 @@ read <<!
 hello \
 world
 !
-[[ $REPLY = 'hello world' ]] || err_exit "read continuation failed"
+[[ $REPLY == 'hello world' ]] || err_exit "read continuation failed"
 read -d x <<!
 hello worldxfoobar
 !
-[[ $REPLY = 'hello world' ]] || err_exit "read builtin failed"
+[[ $REPLY == 'hello world' ]] || err_exit "read builtin failed"
 read <<\!
 hello \
 	world \
@@ -216,7 +216,7 @@ fi
 if	[[ $( trap 'print done' EXIT; trap - EXIT) == done ]]
 then	err_exit 'trap on EXIT not being cleared'
 fi
-if	[[ $(type test) != 'test is a shell builtin' ]]
+if	[[ $(LC_MESSAGES=C type test) != 'test is a shell builtin' ]]
 then	err_exit 'whence -v test not a builtin'
 fi
 builtin -d test
@@ -404,6 +404,8 @@ do	case $opt in
 	esac
 done
 
+[[ $($SHELL 2> /dev/null -c 'readonly foo; getopts a: foo -a blah; echo foo') == foo ]] || err_exit 'getopts with readonly variable causes script to abort'
+
 unset a
 { read -N3 a; read -N1 b;}  <<!
 abcdefg
@@ -525,4 +527,19 @@ done
 [[ $($SHELL -c 'y=3; unset 123 y;print $?$y') == 1 ]] 2> /dev/null ||  err_exit 'y is not getting unset with unset 123 y'
 [[ $($SHELL -c 'trap foo TERM; (trap;(trap) )') == 'trap -- foo TERM' ]] || err_exit 'traps not getting reset when subshell is last process'
 
-exit $((Errors))
+n=$(printf "%b" 'a\0b\0c' | wc -c)
+(( n == 5 )) || err_exit '\0 not working with %b format with printf'
+
+t=$(ulimit -t)
+[[ $($SHELL -c 'ulimit -v 15000 2>/dev/null; ulimit -t') == "$t" ]] || err_exit 'ulimit -v changes ulimit -t'
+
+$SHELL 2> /dev/null -c 'cd ""' && err_exit 'cd "" not producing an error'
+[[ $($SHELL 2> /dev/null -c 'cd "";print hi') != hi ]] && err_exit 'cd "" should not terminate script'
+
+bincat=$(whence -p cat)
+builtin cat
+out=$tmp/seq.out
+seq 11 >$out
+cmp -s <(print -- "$($bincat<( $bincat $out ) )") <(print -- "$(cat <( cat $out ) )") || err_exit "builtin cat differs from $bincat"
+
+exit $((Errors<125?Errors:125))

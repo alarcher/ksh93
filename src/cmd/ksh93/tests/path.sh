@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -303,4 +303,36 @@ got=$($SHELL -c "$scr; print \$?" 2>/dev/null)
 got=$($SHELL -c "command $scr; print \$?" 2>/dev/null)
 [[ "$got" == "$exp" ]] || err_exit "\$SHELL -c of command of unreadable non-empty script should fail -- expected $exp, got" $got
 
-exit $((Errors))
+# whence -a bug fix
+cd "$tmp"
+ifs=$IFS
+IFS=$'\n'
+PATH=$PATH:
+> ls
+chmod +x ls
+ok=
+for i in $(whence -a ls)
+do	if	[[ $i == *"$PWD/ls" ]]
+	then	ok=1
+		break;
+	fi
+done
+[[ $ok ]] || err_exit 'whence -a not finding all executables'
+rm -f ls
+PATH=${PATH%:}
+
+# whence -q bug fix
+$SHELL -c 'whence -q cat' & pid=$!
+sleep 3
+kill $! 2> /dev/null && err_exit 'whence -q appears to be hung'
+
+FPATH=$PWD
+print  'function foobar { :;}' > foobar
+autoload foobar;
+for ((i=0; i < 25; i++))
+do	( foobar )
+done
+exec {n}< /dev/null
+(( n > 24 )) && err_exit 'autoload function in subshell leaves file open'
+
+exit $((Errors<125?Errors:125))

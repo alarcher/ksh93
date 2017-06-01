@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -210,7 +210,7 @@ const struct shtable2 shtab_signals[] =
 	"TTIN",		VAL(SIGTTIN,0),					S("Stopped (SIGTTIN)"),
 #endif	/* SIGTTIN */
 #ifdef SIGTTOU
-	"TTOU",		VAL(SIGTTOU,0),					S("Stopped(SIGTTOU)"),
+	"TTOU",		VAL(SIGTTOU,0),					S("Stopped (SIGTTOU)"),
 #endif	/* SIGTTOU */
 #ifdef SIGURG
 	"URG",		VAL(SIGURG,SH_SIGIGNORE),			S("Socket interrupt"),

@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -43,9 +43,15 @@ fi
 if	[[ -a $file ]]
 then	err_exit "-a: $file shouldn't exist"
 fi
+if	[[ -e $file ]]
+then	err_exit "-e: $file shouldn't exist"
+fi
 > $file
 if	[[ ! -a $file ]]
 then	err_exit "-a: $file should exist"
+fi
+if	[[ ! -e $file ]]
+then	err_exit "-e: $file should exist"
 fi
 chmod 777 $file
 if	[[ ! -r $file ]]
@@ -124,7 +130,7 @@ fi
 if	[[ $file != $tmp/* ]]
 then	err_exit "$file should match $tmp/*"
 fi
-if	[[ $file = $tmp'/*' ]]
+if	[[ $file == $tmp'/*' ]]
 then	err_exit "$file should not equal $tmp'/*'"
 fi
 [[ ! ( ! -z $null && ! -z x) ]]	|| err_exit "negation and grouping"
@@ -150,7 +156,7 @@ fi
 if	[[ 'x&' != *'&' ]]
 then	err_exit " 'x&' does not match '&'* within [[...]]"
 fi
-if	[[ 'xy' = *'*' ]]
+if	[[ 'xy' == *'*' ]]
 then	err_exit " 'xy' matches *'*' within [[...]]"
 fi
 if	[[ 3 > 4 ]]
@@ -162,7 +168,7 @@ fi
 if	[[ 3x > 4x ]]
 then	err_exit '3x < 4x'
 fi
-x='bin|dev|?'
+x='@(bin|dev|?)'
 cd /
 if	[[ $(print $x) != "$x" ]]
 then	err_exit 'extended pattern matching on command arguments'
@@ -320,4 +326,13 @@ x=abc
 unset x
 [[ ${x[@]+x} ]] && err_exit  '${x[@]+x} should be Empty'
 unset x y z foo bar
-exit $((Errors))
+
+{ x=$($SHELL -c '[[ (( $# -eq 0 )) ]] && print ok') 2> /dev/null;}
+[[ $x == ok ]] || err_exit '((...)) inside [[...]] not treated as nested ()'
+
+[[ -e /dev/fd/ ]] || err_exit '/dev/fd/ does not exits'
+[[ -e /dev/tcp/ ]] || err_exit '/dev/tcp/ does not exist'
+[[ -e /dev/udp/ ]] || err_exit '/dev/udp/ does not exist'
+[[ -e /dev/xxx/ ]] &&  err_exit '/dev/xxx/ exists'
+
+exit $((Errors<125?Errors:125))

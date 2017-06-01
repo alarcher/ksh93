@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -138,11 +138,11 @@ const Shtable_t shtab_attributes[] =
 	{"-iinteger",	NV_INTEGER},
 	{"-Hfilename",	NV_HOST},
 	{"-bbinary",    NV_BINARY},
-	{"-llowercase",	NV_UTOL},
+	{"-ltolower",	NV_UTOL},
+	{"-utoupper",	NV_LTOU},
 	{"-Zzerofill",	NV_ZFILL},
 	{"-Lleftjust",	NV_LJUST},
 	{"-Rrightjust",	NV_RJUST},
-	{"-uuppercase",	NV_LTOU},
 	{"++namespace",	NV_TABLE},
 	{"",		0}
 };

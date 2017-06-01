@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1992-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1992-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -27,7 +27,7 @@
  */
 
 static const char usage[] =
-"[-?\n@(#)$Id: rm (AT&T Research) 2009-06-18 $\n]"
+"[-?\n@(#)$Id: rm (AT&T Research) 2010-12-10 $\n]"
 USAGE_LICENSE
 "[+NAME?rm - remove files]"
 "[+DESCRIPTION?\brm\b removes the named \afile\a arguments. By default it"
@@ -122,6 +122,8 @@ rm(State_t* state, register FTSENT* ent)
 	case FTS_DNX:
 		if (state->unconditional)
 		{
+			if (!beenhere(ent))
+				break;
 			if (!chmod(ent->fts_name, (ent->fts_statp->st_mode & S_IPERM)|S_IRWXU))
 			{
 				fts_set(NiL, ent, FTS_AGAIN);
@@ -156,7 +158,7 @@ rm(State_t* state, register FTSENT* ent)
 		}
 		if (!beenhere(ent))
 		{
-			if (state->unconditional && (ent->fts_statp->st_mode ^ S_IRWXU))
+			if (state->unconditional && (ent->fts_statp->st_mode & S_IRWXU) != S_IRWXU)
 				chmod(path, (ent->fts_statp->st_mode & S_IPERM)|S_IRWXU);
 			if (ent->fts_level > 0)
 			{
@@ -262,33 +264,21 @@ rm(State_t* state, register FTSENT* ent)
 				break;
 			}
 		}
-		else if (!state->force && state->terminal && S_ISREG(ent->fts_statp->st_mode))
+		else if (!state->force && state->terminal && eaccess(path, W_OK))
 		{
-			if ((n = open(path, O_RDWR)) < 0)
-			{
-				if (
-#ifdef ENOENT
-					errno != ENOENT &&
-#endif
-#ifdef EROFS
-					errno != EROFS &&
-#endif
-					(v = astquery(-1, "override protection %s for %s? ",
+			if ((v = astquery(-1, "override protection %s for %s? ",
 #ifdef ETXTBSY
-					errno == ETXTBSY ? "``running program''" : 
+				errno == ETXTBSY ? "``running program''" : 
 #endif
-					ent->fts_statp->st_uid != state->uid ? "``not owner''" :
-					fmtmode(ent->fts_statp->st_mode & S_IPERM, 0) + 1, ent->fts_path)) < 0 ||
-					sh_checksig(state->context))
-						return -1;
-					if (v > 0)
-					{
-						nonempty(ent);
-						break;
-					}
+				ent->fts_statp->st_uid != state->uid ? "``not owner''" :
+				fmtmode(ent->fts_statp->st_mode & S_IPERM, 0) + 1, ent->fts_path)) < 0 ||
+			    sh_checksig(state->context))
+				return -1;
+			if (v > 0)
+			{
+				nonempty(ent);
+				break;
 			}
-			else
-				close(n);
 		}
 #if _lib_fsync
 		if (state->clobber && S_ISREG(ent->fts_statp->st_mode) && ent->fts_statp->st_size > 0)
@@ -382,10 +372,10 @@ b_rm(int argc, register char** argv, void* context)
 			continue;
 		case '?':
 			error(ERROR_USAGE|4, "%s", opt_info.arg);
-			continue;
+			break;
 		case ':':
 			error(2, "%s", opt_info.arg);
-			continue;
+			break;
 		}
 		break;
 	}

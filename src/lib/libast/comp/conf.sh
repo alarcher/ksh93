@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1985-2010 AT&T Intellectual Property          #
+#          Copyright (c) 1985-2011 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                  Common Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -21,7 +21,7 @@
 ########################################################################
 : generate getconf and limits info
 #
-# @(#)conf.sh (AT&T Research) 2008-01-31
+# @(#)conf.sh (AT&T Research) 2010-09-14
 #
 # this script generates these files from the table file in the first arg
 # the remaining args are the C compiler name and flags
@@ -1105,6 +1105,7 @@ main()
 						;;
 					*)	cat > $tmp.c <<!
 ${head}
+#include <stdio.h>
 #include <sys/types.h>
 #include <limits.h>
 #include <unistd.h>$systeminfo$headers
@@ -1224,6 +1225,9 @@ printf("#endif\n");
 				case $flags in
 				*M*)	conf_flags="${conf_flags}|CONF_MINMAX_DEF" ;;
 				esac
+				case $conf_minmax in
+				[-+0123456789]*)	x= ;;
+				esac
 				break
 				;;
 			esac
@@ -1286,7 +1290,13 @@ ${script}
 			case $x in
 			?*)	conf_minmax=$x
 				case $flags in
-				*M*)	conf_flags="${conf_flags}|CONF_MINMAX_DEF" ;;
+				*M*)	case "|$conf_flags|" in
+					*'|CONF_MINMAX_DEF|'*)
+						;;
+					*)	conf_flags="${conf_flags}|CONF_MINMAX_DEF"
+						;;
+					esac
+					;;
 				esac
 				;;
 			esac
@@ -1515,10 +1525,10 @@ typedef struct Prefix_s
 } Prefix_t;
 
 extern const Conf_t	conf[];
-extern int		conf_elements;
+extern const int	conf_elements;
 
 extern const Prefix_t	prefix[];
-extern int		prefix_elements;
+extern const int	prefix_elements;
 
 #endif
 !
@@ -1564,7 +1574,7 @@ cat <<!
 	"SI",		2,	CONF_SVID,	CONF_sysinfo,
 };
 
-int	prefix_elements = (int)sizeof(prefix) / (int)sizeof(prefix[0]);
+const int	prefix_elements = (int)sizeof(prefix) / (int)sizeof(prefix[0]);
 
 /*
  * conf strings sorted in ascending order
@@ -1577,7 +1587,7 @@ cat $tmp.t
 cat <<!
 };
 
-int	conf_elements = (int)sizeof(conf) / (int)sizeof(conf[0]);
+const int	conf_elements = (int)sizeof(conf) / (int)sizeof(conf[0]);
 !
 } > $tmp.4
 case $debug in

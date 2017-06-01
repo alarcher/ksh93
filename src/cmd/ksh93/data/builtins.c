@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -144,6 +144,30 @@ const struct shtable3 shtab_builtins[] =
 #endif
 	"",		0, 0 
 };
+
+#if SHOPT_COSHELL
+#  define _JOB_	"[+?Each \ajob\a can be specified as one of the following:]{" \
+        "[+\anumber\a?\anumber\a refers to a process id.]" \
+        "[+-\anumber\a?\anumber\a refers to a process group id.]" \
+        "[+\apool\a.\anum\a?refers to job \anum\a in background pool named \apool\a.]" \
+        "[+\apool\a?refers to all jobs in background pool named \apool\a.]" \
+        "[+%\anumber\a?\anumber\a refer to a job number.]" \
+        "[+%\astring\a?Refers to a job whose name begins with \astring\a.]" \
+        "[+%??\astring\a?Refers to a job whose name contains \astring\a.]" \
+        "[+%+ \bor\b %%?Refers to the current job.]" \
+        "[+%-?Refers to the previous job.]" \
+	"}"
+#else
+#  define _JOB_	"[+?Each \ajob\a can be specified as one of the following:]{" \
+        "[+\anumber\a?\anumber\a refers to a process id.]" \
+        "[+-\anumber\a?\anumber\a refers to a process group id.]" \
+        "[+%\anumber\a?\anumber\a refer to a job number.]" \
+        "[+%\astring\a?Refers to a job whose name begins with \astring\a.]" \
+        "[+%??\astring\a?Refers to a job whose name contains \astring\a.]" \
+        "[+%+ \bor\b %%?Refers to the current job.]" \
+        "[+%-?Refers to the previous job.]" \
+	"}"
+#endif
 
 
 const char sh_set[] =
@@ -348,7 +372,7 @@ USAGE_LICENSE
 ;
 
 const char sh_optbuiltin[] =
-"[-1c?\n@(#)$Id: builtin (AT&T Research) 1999-07-10 $\n]"
+"[-1c?\n@(#)$Id: builtin (AT&T Research) 2010-08-04 $\n]"
 USAGE_LICENSE
 "[+NAME?builtin - add, delete, or display shell built-ins]"
 "[+DESCRIPTION?\bbuiltin\b can be used to add, delete, or display "
@@ -381,13 +405,16 @@ USAGE_LICENSE
 "[d?Deletes each of the specified built-ins. Special built-ins cannot be "
     "deleted.]"
 "[f]:[lib?On systems with dynamic linking, \alib\a names a shared "
-    "library to load and search for built-ins. Libraries are search for in "
-    "\b$PATH\b and system dependent library directories. The system "
+    "library to load and search for built-ins. Libraries are searched for "
+    "in \b../lib/ksh\b and \b../lib\b on \b$PATH\b and in system dependent "
+    "library directories. The system "
     "dependent shared library prefix and/or suffix may be omitted. Once a "
     "library is loaded, its symbols become available for the current and "
     "subsequent invocations of \bbuiltin\b. Multiple libraries can be "
     "specified with separate invocations of \bbuiltin\b. Libraries are "
     "searched in the reverse order in which they are specified.]"
+"[l?List the library base name, plugin YYYYMMDD version stamp, and full "
+    "path for \b-f\b\alib\a on one line on the standard output.]"
 "[s?Display only the special built-ins.]"
 "\n"
 "\n[pathname ...]\n"
@@ -778,6 +805,9 @@ USAGE_LICENSE
 "[+?When the end of options is encountered, \bgetopts\b exits with a "
   "non-zero return value and the variable \bOPTIND\b is set to the "
   "index of the first non-option argument.]"
+"[+?The obsolete long option forms \aflag\a(\along-name\a) and "
+  "\aflag\a:(\along-name\a) for options that take arguments is supported "
+  "for backwards compatibility.]"
 "a:[name?Use \aname\a instead of the command name in usage messages.]"
 "\n"
 "\nopstring name [args...]\n"
@@ -797,15 +827,7 @@ USAGE_LICENSE
 	"and sends them a \bCONT\b signal to start them running.]"
 "[+?If \ajob\a is omitted, the most recently started or stopped "
 	"background job is resumed or continued in the background.]"
-"[+?Each \ajob\a can be specified as one of the following:]{"
-	"[+\anumber\a?\anumber\a refers to a process id.]"
-	"[+-\anumber\a?\anumber\a refers to a process group id.]"
-	"[+%\anumber\a?\anumber\a refer to a job number.]"
-	"[+%\astring\a?Refers to a job whose name begins with \astring\a.]"
-	"[+%??\astring\a?Refers to a job whose name contains \astring\a.]"
-	"[+%+ \bor\b %%?Refers to the current job.]"
-	"[+%-?Refers to the previous job.]"
-"}"
+_JOB_
 "\n"
 "\n[job ...]\n"
 "\n"
@@ -826,15 +848,7 @@ USAGE_LICENSE
 	"in sequence and sends them a \bCONT\b signal to start each running.]"
 "[+?If \ajob\a is omitted, the most recently started or stopped "
 	"background job is moved to the foreground.]"
-"[+?Each \ajob\a can be specified as one of the following:]{"
-	"[+\anumber\a?\anumber\a refers to a process id.]"
-	"[+-\anumber\a?\anumber\a refers to a process group id.]"
-	"[+%\anumber\a?\anumber\a refer to a job number.]"
-	"[+%\astring\a?Refers to a job whose name begins with \astring\a.]"
-	"[+%??\astring\a?Refers to a job whose name contains \astring\a.]"
-	"[+%+ \bor\b %%?Refers to the current job.]"
-	"[+%-?Refers to the previous job.]"
-"}"
+_JOB_
 "\n"
 "\n[job ...]\n"
 "\n"
@@ -856,15 +870,7 @@ USAGE_LICENSE
 	"the current shell terminates a login session.]"
 "[+?If \ajob\a is omitted, the most recently started or stopped "
 	"background job is used.]"
-"[+?Each \ajob\a can be specified as one of the following:]{"
-	"[+\anumber\a?\anumber\a refers to a process id.]"
-	"[+-\anumber\a?\anumber\a refers to a process group id.]"
-	"[+%\anumber\a?\anumber\a refer to a job number.]"
-	"[+%\astring\a?Refers to a job whose name begins with \astring\a.]"
-	"[+%??\astring\a?Refers to a job whose name contains \astring\a.]"
-	"[+%+ \bor\b %%?Refers to the current job.]"
-	"[+%-?Refers to the previous job.]"
-"}"
+_JOB_
 "\n"
 "\n[job ...]\n"
 "\n"
@@ -890,15 +896,7 @@ USAGE_LICENSE
 "[+?When \bjobs\b reports the termination status of a job, the "
 	"shell removes the jobs from the list of known jobs in "
 	"the current shell environment.]"
-"[+?Each \ajob\a can be specified as one of the following:]{"
-	"[+\anumber\a?\anumber\a refers to a process id.]"
-	"[+-\anumber\a?\anumber\a refers to a process group id.]"
-	"[+%\anumber\a?\anumber\a refer to a job number.]"
-	"[+%\astring\a?Refers to a job whose name begins with \astring\a.]"
-	"[+%??\astring\a?Refers to a job whose name contains \astring\a.]"
-	"[+%+ \bor\b %%?Refers to the current job.]"
-	"[+%-?Refers to the previous job.]"
-"}"
+_JOB_
 "[l?\bjobs\b displays process id's after the job number in addition "
 	"to the usual information]"
 "[n?Only the jobs whose status has changed since the last prompt "
@@ -991,15 +989,7 @@ USAGE_LICENSE
 	"\bkill\b sends a signal to one or more processes specified by "
 	"\ajob\a.  This normally terminates the processes unless the signal "
 	"is being caught or ignored.]"
-"[+?A \ajob\a can be specified as one of the following:]{"
-	"[+\anumber\a?\anumber\a refers to a process id.]"
-	"[+-\anumber\a?\anumber\a refers to a process group id.]"
-	"[+%\anumber\a?\anumber\a refer to a job number.]"
-	"[+%\astring\a?Refers to a job whose name begins with \astring\a.]"
-	"[+%??\astring\a?Refers to a job whose name contains \astring\a.]"
-	"[+%+ \bor\b %%?Refers to the current job.]"
-	"[+%-?Refers to the previous job.]"
-"}"
+_JOB_
 "[+?If the signal is not specified with either the \b-n\b or the \b-s\b  "
 	"option, the \bSIGTERM\b signal is used.]"
 "[+?If \b-l\b is specified, and no \aarg\a is specified, then \bkill\b "
@@ -1184,6 +1174,8 @@ USAGE_LICENSE
 	"[+-?The format modifier flag \bL\b can be used with the \bc\b and "
 		"\bs\b formats to treat precision as character width instead "
 		"of byte count.]"
+	"[+-?The format modifier flag \b,\b can be used with \bd\b and \bf\f "
+		"formats to cause group of digits.]"
 	"[+-?Each of the integral format specifiers can have a third "
 		"modifier after width and precision that specifies the "
 		"base of the conversion from 2 to 64.  In this case the "
@@ -1257,6 +1249,8 @@ USAGE_LICENSE
 "[+?If you specify \b?\b\aprompt\a after the first \avar\a, then \bread\b "
 	"will display \aprompt\a on standard error when standard input "
 	"is a terminal or pipe.]"
+"[+?If an end of file is encountered while reading a line the data is "
+	"read and processed but \bread\b returns with a non-zero exit status.]"
 "[A?Unset \avar\a and then create an indexed array containing each field in "
 	"the line starting at index 0.]"
 "[C?Unset \avar\a and read  \avar\a as a compound variable.]"
@@ -1269,10 +1263,10 @@ USAGE_LICENSE
 "[u]#[fd:=0?Read from file descriptor number \afd\a instead of standard input.]"
 "[t]:[timeout?Specify a timeout \atimeout\a in seconds when reading from "
 	"a terminal or pipe.]"
-"[n]#[nchar?Read at most \anchar\a characters.  For binary fields \asize\a "
-	"will be in bytes.]"
-"[N]#[nchar?Read exactly \anchar\a characters.  For binary fields \asize\a "
-	"will be in bytes.]"
+"[n]#[count?Read at most \acount\a characters.  For binary fields \acount\a "
+	"is the number of bytes.]"
+"[N]#[count?Read exactly \ancount\a characters.  For binary fields \acount\a "
+	"is the number of bytes.]"
 "[v?When reading from a terminal the value of the first variable is displayed "
 	"and used as a default value.]"
 "\n"
@@ -1340,7 +1334,7 @@ USAGE_LICENSE
 
 
 const char sh_optksh[] =
-"+[-1c?\n@(#)$Id: sh (AT&T Research) "SH_RELEASE" $\n]"
+"+[-1?\n@(#)$Id: sh (AT&T Research) "SH_RELEASE" $\n]"
 USAGE_LICENSE
 "[+NAME?\b\f?\f\b - Shell, the standard command language interpreter]"
 "[+DESCRIPTION?\b\f?\f\b is a command language interpreter that "
@@ -1576,7 +1570,7 @@ USAGE_LICENSE
 ;
 
 const char sh_opttypeset[] =
-"+[-1c?\n@(#)$Id: typeset (AT&T Research) 2008-08-04 $\n]"
+"+[-1c?\n@(#)$Id: typeset (AT&T Research) 2010-12-08 $\n]"
 USAGE_LICENSE
 "[+NAME?\f?\f - declare or display variables with attributes]"
 "[+DESCRIPTION?Without the \b-f\b option, \b\f?\f\b sets, unsets, "
@@ -1626,8 +1620,8 @@ USAGE_LICENSE
 "[f?Each of the options and \aname\as refers to a function.]"
 "[i]#?[base:=10?An integer. \abase\a represents the arithmetic base "
 	"from 2 to 64.]"
-"[l?Convert uppercase character to lowercase.  Unsets \b-u\b attribute.  When "
-	"used with \b-i\b, \b-E\b, or \b-F\b indicates long variant.]"
+"[l?Without \b-i\b, sets character mapping to \btolower\b. When used "
+	"with \b-i\b, \b-E\b, or \b-F\b indicates long variant.]"
 "[m?Move.  The value is the name of a variable whose value will be "
 	"moved to \aname\a.  The orignal variable will be unset.  Cannot be "
 	"used with any other options.]"
@@ -1642,8 +1636,8 @@ USAGE_LICENSE
 "[t?When used with \b-f\b, enables tracing for each of the specified "
 	"functions.  Otherwise, \b-t\b is a user defined attribute and "
 	"has no meaning to the shell.]"
-"[u?Without \b-f\b or \b-i\b, converts lowercase character to uppercase "
-	"and unsets \b-l\b.  With \b-f\b specifies that \aname\a is a function "
+"[u?Without \b-f\b or \b-i\b, sets character mapping to \btoupper\b.  When "
+	"used with \b-f\b specifies that \aname\a is a function "
 	"that hasn't been loaded yet.  With \b-i\b specifies that the "
 	"value will be displayed as an unsigned integer.]"
 "[x?Puts each \aname\a on the export list.  See \bexport\b(1).  \aname\a "
@@ -1666,6 +1660,10 @@ USAGE_LICENSE
 "[L]#?[n?Left justify.  If \an\a is given it represents the field width.  If "
 	"the \b-Z\b attribute is also specified, then leading zeros are "
 	"stripped.]"
+"[M]:?[mapping?\amapping\a is the name of a character mapping known by "
+	"\bwctrans\b(3) such as \btolower\b or \btoupper\b.  When the option "
+	"value \bmapping\b is omitted and there are no operands, all mapped "
+	"variables are displayed.]"
 "[R]#?[n?Right justify.  If \an\a is given it represents the field width.  If "
 	"the \b-Z\b attribute is also specified, then zeros will "
 	"be used as the fill character.  Otherwise, spaces are used.]"
@@ -1682,7 +1680,7 @@ USAGE_LICENSE
 	"will have function static scope.  Otherwise, the variable is "
 	"unset prior to processing the assignment list.]"
 #endif
-"[T]:[tname?\atname\a is the name of a type name given to each \aname\a.]"
+"[T]:?[tname?\atname\a is the name of a type name given to each \aname\a.]"
 "[Z]#?[n?Zero fill.  If \an\a is given it represents the field width.]"
 "\n"
 "\n[name[=value]...]\n"
@@ -1815,15 +1813,7 @@ USAGE_LICENSE
 	"known to the invoking shell have terminated.  If one or more "
 	"\ajob\a operands are specified, \bwait\b waits until all of them "
 	"have completed.]"
-"[+?Each \ajob\a can be specified as one of the following:]{"
-	"[+\anumber\a?\anumber\a refers to a process id.]"
-	"[+-\anumber\a?\anumber\a refers to a process group id.]"
-	"[+%\anumber\a?\anumber\a refer to a job number.]"
-	"[+%\astring\a?Refers to a job whose name begins with \astring\a.]"
-	"[+%??\astring\a?Refers to a job whose name contains \astring\a.]"
-	"[+%+ \bor\b %%?Refers to the current job.]"
-	"[+%-?Refers to the previous job.]"
-"}"
+_JOB_
 "[+?If one ore more \ajob\a operands is a process id or process group id "
 	"not known by the current shell environment, \bwait\b treats each "
 	"of them as if it were a process that exited with status 127.]"

@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1992-2010 AT&T Intellectual Property          *
+*          Copyright (c) 1992-2011 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                  Common Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -840,8 +840,6 @@ b_join(int argc, char** argv, void* context)
 	{
 		switch (n = optget(argv, usage))
 		{
-		case 0:
-			break;
  		case 'j':
 			/*
 			 * check for obsolete "-j1 field" and "-j2 field"

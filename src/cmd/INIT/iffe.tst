@@ -1849,3 +1849,95 @@ header stdio.h'
 #endif'
 		ERROR - $'iffe: test: is sys/types.h a header ... yes
 iffe: test: is stdio.h a header ... yes'
+
+TEST 18 'api + ver'
+	EXEC	-r -v - t.iffe
+		INPUT t.iffe $'iff api
+ver foo 20100606
+ver bar 19840919
+
+api foo 19991231 dis dat tother
+api foo 20100601 dat
+api foo 20100606 dis
+api bar 19991231 moe larry shemp
+api bar 20020202 curly
+api bar 20030303 shemp
+api bar 20040404 joe_b
+api bar 20050505 joe_d
+'
+		OUTPUT - $'/* : : generated from t.iffe by iffe version 1995-03-19 : : */
+#ifndef _api_H
+#define _api_H	1
+#define _sys_types	1	/* #include <sys/types.h> ok */
+
+#define FOO_VERSION	20100606
+#define BAR_VERSION	19840919
+
+#if !defined(_API_foo) && defined(_API_DEFAULT)
+#define _API_foo	_API_DEFAULT
+#endif
+
+#if ( _BLD_foo || !_API_foo || _API_foo >= 20100601 )
+#undef	dat
+#define dat	dat_20100601
+#elif _API_foo >= 19991231
+#undef	dat
+#define dat	dat_19991231
+#endif
+
+#if ( _BLD_foo || !_API_foo || _API_foo >= 20100606 )
+#undef	dis
+#define dis	dis_20100606
+#elif _API_foo >= 19991231
+#undef	dis
+#define dis	dis_19991231
+#endif
+
+#if ( _BLD_foo || !_API_foo || _API_foo >= 19991231 )
+#undef	tother
+#define tother	tother_19991231
+#endif
+
+#define _API_foo_MAP	"dat_20100601 dat_19991231 dis_20100606 dis_19991231 tother_19991231"
+
+#if !defined(_API_bar) && defined(_API_DEFAULT)
+#define _API_bar	_API_DEFAULT
+#endif
+
+#if ( _BLD_bar || !_API_bar || _API_bar >= 20020202 )
+#undef	curly
+#define curly	curly_20020202
+#endif
+
+#if ( _BLD_bar || !_API_bar || _API_bar >= 20040404 )
+#undef	joe_b
+#define joe_b	joe_b_20040404
+#endif
+
+#if ( _BLD_bar || !_API_bar || _API_bar >= 20050505 )
+#undef	joe_d
+#define joe_d	joe_d_20050505
+#endif
+
+#if ( _BLD_bar || !_API_bar || _API_bar >= 19991231 )
+#undef	larry
+#define larry	larry_19991231
+#endif
+
+#if ( _BLD_bar || !_API_bar || _API_bar >= 19991231 )
+#undef	moe
+#define moe	moe_19991231
+#endif
+
+#if ( _BLD_bar || !_API_bar || _API_bar >= 20030303 )
+#undef	shemp
+#define shemp	shemp_20030303
+#elif _API_bar >= 19991231
+#undef	shemp
+#define shemp	shemp_19991231
+#endif
+
+#define _API_bar_MAP	"curly_20020202 joe_b_20040404 joe_d_20050505 larry_19991231 moe_19991231 shemp_20030303 shemp_19991231"
+
+#endif'
+		ERROR - $'iffe: test: is sys/types.h a header ... yes'
