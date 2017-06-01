@@ -413,6 +413,8 @@ Namval_t **sh_setlist(Shell_t *shp,register struct argnod *arg,register int flag
 				if(ap && ap->fixed)
 					flags |= NV_FARRAY;
 #endif /* SHOPT_FIXEDARRAY */
+				if(sh_isoption(shp,SH_BASH) &&!array && !ap && !(flags&NV_COMVAR) && !np->nvfun && !tp->com.comset && !tp->com.comarg)
+					array = NV_IARRAY;
 				if(array && (!ap || !ap->hdr.type))
 				{
 #if SHOPT_FIXEDARRAY
@@ -2610,7 +2612,7 @@ void	_nv_unset(register Namval_t *np,int flags)
 	if(is_afunction(np) && np->nvalue.ip)
 	{
 		register struct slnod *slp = (struct slnod*)(np->nvenv);
-		if(shp->st.real_fun == np->nvalue.rp)
+		if(np->nvalue.rp->running)
 		{
 			np->nvalue.rp->running |= 1;
 			return;

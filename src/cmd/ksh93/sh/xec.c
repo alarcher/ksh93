@@ -1272,9 +1272,14 @@ tryagain:
 				}
 				if(np && pipejob==2)
 				{
-					job_unlock();
-					nlock--;
-					pipejob = 1;
+					if(shp->comsub==1 && np && is_abuiltin(np) && *np->nvname=='/')
+						np = 0;
+					else
+					{
+						job_unlock();
+						nlock--;
+						pipejob = 1;
+					}
 				}
 				/* check for builtins */
 				if(np && is_abuiltin(np))
@@ -1984,7 +1989,17 @@ tryagain:
 					tsetio = 1;
 				sh_redirect(shp,t->fork.forkio,execflg);
 				(t->fork.forktre)->tre.tretyp |= t->tre.tretyp&FSHOWME;
-				sh_exec(shp,t->fork.forktre,flags&~simple);
+				t = t->fork.forktre;
+				if((t->tre.tretyp&COMMSK)==TCOM && sh_isoption(
+shp,SH_BASH) && !sh_isoption(shp,SH_LASTPIPE))
+				{
+
+					Shnode_t *tt = (Shnode_t*)stkalloc(shp->stk,sizeof(Shnode_t));
+					tt->par.partyp = type = TPAR;
+					tt->par.partre = (Shnode_t*)t;
+					t = tt;
+				}
+				sh_exec(shp,t,flags&~simple);
 			}
 			else
 				sfsync(shp->outpool);
@@ -2001,7 +2016,7 @@ tryagain:
 				if(!(type&SH_EXITSIG))
 				{
 					/* wait for remainder of pipline */
-					if(shp->pipepid>1)
+					if(shp->pipepid>1 && shp->comsub!=1)
 					{
 						job_wait(shp->pipepid);
 						type = shp->exitval;
@@ -2343,7 +2358,7 @@ tryagain:
 					save_prompt = shp->nextprompt;
 					shp->nextprompt = 3;
 					shp->timeout = 0;
-					shp->exitval=sh_readline(shp,&nullptr,0,1,(size_t)0,1000*shp->st.tmout);
+					shp->exitval=sh_readline(shp,&nullptr,(void*)0,0,1,(size_t)0,1000*shp->st.tmout);
 					shp->nextprompt = save_prompt;
 					if(shp->exitval||sfeof(sfstdin)||sferror(sfstdin))
 					{
@@ -3436,6 +3451,11 @@ static void sh_funct(Shell_t *shp,Namval_t *np,int argn, char *argv[],struct arg
 	nv_putval(SH_PATHNAMENOD,shp->st.filename,NV_NOFREE);
 	shp->pipepid = pipepid;
 	np->nvalue.rp->running  -= 2;
+	if(np->nvalue.rp && np->nvalue.rp->running==1)
+	{
+		np->nvalue.rp->running = 0;
+		_nv_unset(np, NV_RDONLY);
+	}
 }
 
 /*
@@ -4123,7 +4143,7 @@ int sh_funscope_20120720(Shell_t *shp,int argn, char *argv[],int(*fun)(void*),vo
 	}
 	if(jmpval)
 		r=shp->exitval;
-	if(r>SH_EXITSIG && ((r&SH_EXITMASK)==SIGINT || ((r&SH_EXITMASK)==SIGQUIT)))
+	if(!sh_isstate(shp,SH_IOPROMPT) && r>SH_EXITSIG && ((r&SH_EXITMASK)==SIGINT || ((r&SH_EXITMASK)==SIGQUIT)))
 		kill(getpid(),r&SH_EXITMASK);
 	if(jmpval > SH_JMPFUN)
 	{
