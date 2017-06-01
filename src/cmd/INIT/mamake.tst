@@ -1,4 +1,4 @@
-# : : generated from /home/gsf/src/cmd/INIT/mamake.rt by mktest : : #
+# : : generated from mamake.rt by mktest : : #
 
 # regression tests for the mamake command
 

@@ -79,6 +79,7 @@
 
 #include	"FEATURE/vmalloc"
 
+#include	<aso.h>		/* atomic scalor operations		*/
 #include	<setjmp.h>	/* use the type jmp_buf for alignment	*/
 
 /* extra information needed about methods to get memory from the system */
@@ -120,9 +121,10 @@ typedef struct _pfobj_s	Pfobj_t;
 #define MULTIPLE(x,y)	((x)%(y) == 0 ? (x) : (y)%(x) == 0 ? (y) : (y)*(x))
 
 #define VM_abort	0x0001	/* abort() on assertion failure		*/
-#define VM_check	0x0002	/* enable detailed checks		*/
-#define VM_free		0x0004	/* disable addfreelist()		*/
-#define VM_keep		0x0008	/* disable free()			*/
+#define VM_break	0x0002	/* try sbrk() block allocator first	*/
+#define VM_check	0x0004	/* enable detailed checks		*/
+#define VM_free		0x0008	/* disable addfreelist()		*/
+#define VM_keep		0x0010	/* disable free()			*/
 
 #if _UWIN
 #include <ast_windows.h>
@@ -259,9 +261,11 @@ struct _body_s
 	Block_t**	self;	/* self pointer when free	*/
 };
 #define BODYSIZE	ROUND(sizeof(struct _body_s),ALIGN)
+
 union _body_u
 {	Vmuchar_t	data[BODYSIZE];	/* to standardize size		*/
 	struct _body_s	body;
+	Block_t*	self[1];
 };
 
 /* After all the songs and dances, we should now have:
@@ -345,7 +349,7 @@ struct _seg_s
 
 #define DATA(b)		((Void_t*)((b)->body.data) )
 #define BLOCK(d)	((Block_t*)((char*)(d) - sizeof(Head_t)) )
-#define SELF(b)		((Block_t**)((b)->body.data + SIZE(b) - sizeof(Block_t*)) )
+#define SELF(b)		(b)->body.self[SIZE(b)/sizeof(Block_t*)-1]
 #define LAST(b)		(*((Block_t**)(((char*)(b)) - sizeof(Block_t*)) ) )
 #define NEXT(b)		((Block_t*)((b)->body.data + SIZE(b)) )
 

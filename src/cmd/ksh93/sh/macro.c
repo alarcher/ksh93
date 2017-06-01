@@ -856,22 +856,7 @@ done:
 static void mac_substitute(Mac_t *mp, register char *cp,char *str,register int subexp[],int subsize)
 {
 	register int	c,n;
-	register char *first=fcseek(0);
-	char		*ptr;
-	Mac_t		savemac;
-	Stk_t		*stkp = mp->shp->stk;
-	n = stktell(stkp);
-	savemac = *mp;
-	mp->pattern = 3;
-	mp->split = 0;
-	fcsopen(cp);
-	copyto(mp,0,0);
-	sfputc(stkp,0);
-	ptr = cp = strdup(stkptr(stkp,n));
-	stkseek(stkp,n);
-	*mp = savemac;
-	fcsopen(first);
-	first = cp;
+	register char *first=cp;
 	while(1)
 	{
 		while((c= *cp++) && c!=ESCAPE);
@@ -899,7 +884,6 @@ static void mac_substitute(Mac_t *mp, register char *cp,char *str,register int s
 	}
 	if(n=cp-first-1)
 		mac_copy(mp,first,n);
-	free(ptr);
 }
 
 #if  SHOPT_FILESCAN
@@ -1102,7 +1086,7 @@ static int varsub(Mac_t *mp)
 	Lex_t		*lp = (Lex_t*)mp->shp->lex_context;
 	Namarr_t	*ap=0;
 	int		dolmax=0, vsize= -1, offset= -1, nulflg, replen=0, bysub=0;
-	char		idbuff[3], *id = idbuff, *pattern=0, *repstr, *arrmax=0;
+	char		idbuff[3], *id = idbuff, *pattern=0, *repstr=0, *arrmax=0;
 	char		*idx = 0;
 	int		var=1,addsub=0,oldpat=mp->pattern,idnum=0,flag=0,d;
 	Stk_t		*stkp = mp->shp->stk;
@@ -1765,7 +1749,22 @@ retry1:
 		}
 		pattern = strdup(argp);
 		if((type=='/' || c=='/') && (repstr = mac_getstring(pattern)))
+		{
+			Mac_t	savemac;
+			char	*first = fcseek(0);
+			int	n = stktell(stkp);
+			savemac = *mp;
+			fcsopen(repstr);
+			mp->pattern = 3;
+			mp->split = 0;
+			copyto(mp,0,0);
+			sfputc(stkp,0);
+			repstr = strdup(stkptr(stkp,n));
 			replen = strlen(repstr);
+			stkseek(stkp,n);
+			*mp = savemac;
+			fcsopen(first);
+		}
 		if(v || c=='/' && offset>=0)
 			stkseek(stkp,offset);
 	}
@@ -1977,6 +1976,8 @@ retry2:
 		nv_close(np);
 	if(pattern)
 		free(pattern);
+	if(repstr)
+		free(repstr);
 	if(idx)
 		free(idx);
 	return(1);
@@ -2033,6 +2034,7 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 			t = sh_dolparen((Lex_t*)mp->shp->lex_context);
 		if(t && t->tre.tretyp==TARITH)
 		{
+			mp->shp->inarith = 1;
 			fcsave(&save);
 			if(t->ar.arcomp)
 				num = arith_exec(t->ar.arcomp);
@@ -2040,6 +2042,7 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 				num = sh_arith(mp->shp,t->ar.arexpr->argval);
 			else
 				num = sh_arith(mp->shp,sh_mactrim(mp->shp,t->ar.arexpr->argval,3));
+			mp->shp->inarith = 0;
 		out_offset:
 			stkset(stkp,savptr,savtop);
 			*mp = savemac;
@@ -2590,9 +2593,9 @@ static int	charlen(const char *string,int len)
 /*
  * This is the default tilde discipline function
  */
-static int sh_btilde(int argc, char *argv[], void *context)
+static int sh_btilde(int argc, char *argv[], Shbltin_t *context)
 {
-	Shell_t *shp = ((Shbltin_t*)context)->shp;
+	Shell_t *shp = context->shp;
 	char *cp = sh_tilde(shp,argv[1]);
 	NOT_USED(argc);
 	if(!cp)
@@ -2716,7 +2719,12 @@ skip:
 	if(!logins_tree)
 		logins_tree = dtopen(&_Nvdisc,Dtbag);
 	if(np=nv_search(string,logins_tree,NV_ADD))
+	{
+		c = shp->subshell;
+		shp->subshell = 0;
 		nv_putval(np, pw->pw_dir,0);
+		shp->subshell = c;
+	}
 	return(pw->pw_dir);
 }
 

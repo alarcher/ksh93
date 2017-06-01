@@ -58,17 +58,17 @@ struct read_save
         long	timeout;
 };
 
-int	b_read(int argc,char *argv[], void *extra)
+int	b_read(int argc,char *argv[], Shbltin_t *context)
 {
 	Sfdouble_t sec;
 	register char *name;
 	register int r, flags=0, fd=0;
-	register Shell_t *shp = ((Shbltin_t*)extra)->shp;
+	register Shell_t *shp = context->shp;
 	long timeout = 1000*shp->st.tmout;
-	int save_prompt, fixargs=((Shbltin_t*)extra)->invariant;
+	int save_prompt, fixargs=context->invariant;
 	struct read_save *rp;
 	static char default_prompt[3] = {ESC,ESC};
-	rp = (struct read_save*)(((Shbltin_t*)extra)->data);
+	rp = (struct read_save*)(context->data);
 	if(argc==0)
 	{
 		if(rp)
@@ -156,7 +156,7 @@ int	b_read(int argc,char *argv[], void *extra)
 		r = 0;
 	if(argc==fixargs && (rp=newof(NIL(struct read_save*),struct read_save,1,0)))
 	{
-		((Shbltin_t*)extra)->data = (void*)rp;
+		context->data = (void*)rp;
 		rp->fd = fd;
 		rp->flags = flags;
 		rp->timeout = timeout;
@@ -178,13 +178,9 @@ bypass:
 	shp->nextprompt = save_prompt;
 	if(r==0 && (r=(sfeof(shp->sftable[fd])||sferror(shp->sftable[fd]))))
 	{
-		if(fd == shp->cpipe[0])
-		{
+		if(fd == shp->cpipe[0] && errno!=EINTR)
 			sh_pclose(shp->cpipe);
-			return(1);
-		}
 	}
-	sfclrerr(shp->sftable[fd]);
 	return(r);
 }
 
@@ -220,7 +216,7 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 	char			use_stak = 0;
 	volatile char		was_write = 0;
 	volatile char		was_share = 1;
-	int			rel, wrd;
+	int			rel, wrd, keytrap;
 	long			array_index = 0;
 	void			*timeslot=0;
 	int			delim = '\n';
@@ -230,6 +226,7 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 	int			oflags=NV_ASSIGN|NV_VARNAME;
 	char			inquote = 0;
 	struct	checkpt		buff;
+	Edit_t			*ep = (struct edit*)shp->gd->ed_context;
 	if(!(iop=shp->sftable[fd]) && !(iop=sh_iostream(shp,fd)))
 		return(1);
 	sh_stats(STAT_READS);
@@ -274,13 +271,14 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 		else
 			np = REPLYNOD;
 	}
+	keytrap =  ep?ep->e_keytrap:0;
 	if(flags>>D_FLAG)	/* delimiter not new-line or fixed size read */
 	{
 		if(flags&(N_FLAG|NN_FLAG))
 			size = ((unsigned)flags)>>D_FLAG;
 		else
 			delim = ((unsigned)flags)>>D_FLAG;
-		if(shp->fdstatus[fd]&IOTTY)
+		if((shp->fdstatus[fd]&IOTTY) && !keytrap)
 			tty_raw(fd,1);
 	}
 	binary = nv_isattr(np,NV_BINARY);
@@ -361,20 +359,32 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 			for (;;)
 			{
 				c = size;
-				cp = sfreserve(iop,c,SF_LOCKR);
-				f = 1;
-				if(cp)
-					m = sfvalue(iop);
-				else if(flags&NN_FLAG)
+				if(keytrap)
 				{
-					c = size;
-					m = (cp = sfreserve(iop,c,0)) ? sfvalue(iop) : 0;
+					cp = 0;
 					f = 0;
+					m = 0;
+					while(c-->0 && (buf[m]=ed_getchar(ep,0)))
+						m++;
+					if(m>0)
+						cp = (unsigned char*)buf;
 				}
 				else
 				{
-					c = sfvalue(iop);
-					m = (cp = sfreserve(iop,c,SF_LOCKR)) ? sfvalue(iop) : 0;
+					f = 1;
+					if(cp = sfreserve(iop,c,SF_LOCKR))
+						m = sfvalue(iop);
+					else if(flags&NN_FLAG)
+					{
+						c = size;
+						m = (cp = sfreserve(iop,c,0)) ? sfvalue(iop) : 0;
+						f = 0;
+					}
+					else
+					{
+						c = sfvalue(iop);
+						m = (cp = sfreserve(iop,c,SF_LOCKR)) ? sfvalue(iop) : 0;
+					}
 				}
 				if(m>0 && (flags&N_FLAG) && !binary && (v=memchr(cp,'\n',m)))
 				{
@@ -400,7 +410,8 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 						cur = var + cx;
 						up = var + ux;
 					}
-					memcpy((void*)cur,cp,c);
+					if(cur!=(char*)cp)
+						memcpy((void*)cur,cp,c);
 					if(f)
 						sfread(iop,cp,c);
 					cur += c;
@@ -780,7 +791,7 @@ done:
 	if(!was_share)
 		sfset(iop,SF_SHARE,0);
 	nv_close(np);
-	if(shp->fdstatus[fd]&IOTTY)
+	if((shp->fdstatus[fd]&IOTTY) && !keytrap)
 		tty_cooked(fd);
 	if(flags&S_FLAG)
 		hist_flush(shp->gd->hist_ptr);

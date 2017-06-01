@@ -508,18 +508,24 @@ static void put_cdpath(register Namval_t* np,const char *val,int flags,Namfun_t 
 static void put_ifs(register Namval_t* np,const char *val,int flags,Namfun_t *fp)
 {
 	register struct ifs *ip = (struct ifs*)fp;
-	Shell_t		*shp;
 	ip->ifsnp = 0;
 	if(!val)
 	{
 		fp = nv_stack(np, NIL(Namfun_t*));
 		if(fp && !fp->nofree)
+		{
 			free((void*)fp);
+			fp = 0;
+		}
 	}
 	if(val != np->nvalue.cp)
 		nv_putv(np, val, flags, fp);
-	if(!val && !(flags&NV_CLONE) && (fp=np->nvfun) && !fp->disc && (shp=(Shell_t*)(fp->last)))
-		nv_stack(np,&((Init_t*)shp->init_context)->IFS_init.hdr);
+	if(!val)
+	{
+		if(fp)
+			fp->next = np->nvfun;
+		np->nvfun = fp;
+	}
 }
 
 /*
@@ -1668,6 +1674,9 @@ int sh_reinit(char *argv[])
 	shp->st.filename = strdup(shp->lastarg);
 	nv_delete((Namval_t*)0, (Dt_t*)0, 0);
 	job.exitval = 0;
+	shp->inpipe = shp->outpipe = 0;
+	job_clear();
+	job.in_critical = 0;
 	return(1);
 }
 
@@ -1952,7 +1961,7 @@ static Dt_t *inittree(Shell_t *shp,const struct shtable2 *name_vals)
 		}
 		np->nvenv = 0;
 		if(name_vals==(const struct shtable2*)shtab_builtins)
-			np->nvalue.bfp = ((struct shtable3*)tp)->sh_value;
+			np->nvalue.bfp = (Nambfp_f)((struct shtable3*)tp)->sh_value;
 		else
 		{
 			if(name_vals == shtab_variables)

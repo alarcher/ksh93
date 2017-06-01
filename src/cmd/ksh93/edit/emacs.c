@@ -1074,9 +1074,9 @@ static int escape(register Emacs_t* ep,register genchar *out,int count)
 					if(ep->lastdraw==APPEND && ep->prevdirection != -2)
 					{
 						out[cur] = 0;
-						gencpy(&((genchar*)lstring)[1],out);
+						gencpy((genchar*)lstring+1,out);
 #if SHOPT_MULTIBYTE
-						ed_external(&((genchar*)lstring)[1],lstring+1);
+						ed_external((genchar*)lstring+1,lstring+1);
 #endif /* SHOPT_MULTIBYTE */
 						*lstring = '^';
 						ep->prevdirection = -2;
@@ -1403,7 +1403,7 @@ static void draw(register Emacs_t *ep,Draw_t option)
 		if(ep->ed->hlist)
 			ed_histlist(ep->ed,0);
 	}
-	else if(option==UPDATE && drawbuff[0]=='#' && cur>1 && cur==eol && drawbuff[cur-1]!='*')
+	else if((option==UPDATE||option==APPEND) && drawbuff[0]=='#' && cur>1 && cur==eol && drawbuff[cur-1]!='*')
 	{
 		int		n;
 		drawbuff[cur+1]=0;

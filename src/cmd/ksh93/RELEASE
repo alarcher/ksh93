@@ -1,4 +1,55 @@
-12-01-01  --- Release ksh93u+ ---
+12-02-29  --- Release ksh93u+ ---
+12-02-29  A bug which could lead to a core dump when more that four shared
+	  libraries were added with the builtin command has been fixed.
+12-02-29  Fixed a few bugs which caused SIGCHLD to be blocked preventing
+	  background jobs from being reaped until a foreground job was run.
+12-02-27  A bug in which sh -c for a simple command caused a fork() has been
+	  fixed.
+12-02-27  A timing bug on systems such as AIX that doesn't support vfork()
+	  that could cause the exist status to get lost has been fixed.
+12-02-22  A private file descriptor that was not close-on-exec for a command
+	  substitution and has been fixed.
+12-02-14  A bug in which ^Z did not stop a pipeline when the last component
+	  was a shell built-in has been fixed.
+12-02-14  getconf("PATH") used to initialize ed(1) path.
+12-02-13 +In earlier version read from standard input would fail when called
+	  from the KEYBD trap.  Now read options -N, -n, and -t should work
+	  when called from a KEYBD trap.
+12-02-13  If FCEDIT is not set and fc is invoked without the -e option,
+	  ed will be invoked if found instead of /bin/ed. 
+12-02-10  Another bug in the saving and restoring of IFS in a subshell
+	  that caused a core dump has been fixed.
+12-02-08  A bug in which .sh.fun disciplines could be cleared after a
+	  function completes has been fixed.
+12-02-08  A bug in job control in which the foregroup process group was not
+	  set correctly after restarting a stopped pipeline has been fixed.
+12-02-07  A bug in which numbers with leading zeros could be treated as
+	  octal constants outside of ((...)) has been fixed.
+12-02-06  A bug in arithmetic with compound variables containing multiple
+	  array elements has been fixed.
+12-02-02  A bug in the ulimit option table was fixed.
+12-01-26  A bug in which a set command that did not change monitor could
+	  effect the behavior of the monitor when monitor mode is on is fixed.
+12-01-21 +You can now test whether the shell implements a math function using
+	  typeset -f .sh.math.name, where name is the name of the function.
+12-01-21  A bug in which typeset -L and typeset -R did not handle multibyte
+	  characters correctly has been fixed.
+12-01-20  A bug that could cause the shell to hang waiting for an incorrect
+	  job pid has been fixed.
+12-01-19  A memory leak which occured for a nested command subtiution has been
+	  fixed.
+12-01-17  A bug in which typeset -u PS1 could enable the uppercase attribute
+	  for some other variables, for exampe, HISTFILE has been fixed.
+12-01-16  A bug in which .sh.match was not correct after a substring match when
+	  the replacement string contained a substring match has been fixed.
+12-01-12 +Files that are sourced from profile files are now read and executed
+	  one command at a time so that alias definitions take effect as they
+	  do for profile files.
+12-01-12  A bug in which whence -p would find a function if one existed and
+	  there was no command of that name on PATH.
+12-01-11  Change b_* prototype (int, char**, void*) => (int, char**, Shbltin_t*).
+12-01-05  A bug in which read was not terminating for a signal that had a trap
+	  set has been fixed.
 12-01-01  A timing problem with >; has been fixed.
 12-01-01  A macro expansion memory leak has been fixed.
 11-12-26  A bug in array assignments of the form arr=( $arr[i] ...) in which
@@ -64,7 +115,7 @@
 11-08-03  A bug in which the shell did not preserve the exit status for a
 	  coprocess has been fixed.
 11-08-02  A bug in the saving and restoring of IFS in command substitution that
-	  cause case a core dump has been fixed.
+	  caused a core dump has been fixed.
 11-07-21  Modified the 10-08-27 bug fix so that background jobs started in for
 	  and while loops created interactively generate completion messages.
 11-07-20  I fixed a bug in here documents in which multi-byte characters that

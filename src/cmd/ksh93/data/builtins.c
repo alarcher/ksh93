@@ -20,10 +20,9 @@
 #pragma prototyped
 
 
-#include	<shell.h>
-#include	<signal.h>
 #include	"defs.h"
 #include	"shtable.h"
+#include	<signal.h>
 #include	"ulimit.h"
 #include	"name.h"
 #include	"version.h"
@@ -756,7 +755,14 @@ USAGE_LICENSE
     "\b--\b\alongname\a=\avalue\a. If the : or # is followed by ? then the "
     "option argument is optional. If only the option character form is "
     "specified then the optional argument value is not set if the next "
-    "argument starts with - or +.]"
+    "argument starts with - or +. The special attributes are currently "
+    "informational with respect to \boptget\b(3), but may be useful to "
+    "applications that parse \b--api\b output. The special attributes are:]{"
+    	"[+listof?zero or more of the possible option values may be specified, "
+		"separated by \b,\b or space.]"
+    	"[+oneof?exactly one of the possible option values must be specified]"
+    	"[+ignorecase?case ignored in matching the long option name]"
+    "}"
   "[+4.?A option value description.]"
   "[+5.?A argument specification. A list of valid option argument values "
     "can be specified by enclosing them inside a {...} following "
@@ -1155,6 +1161,9 @@ USAGE_LICENSE
 		"command.]"
 	"[+%Z?Output a byte whose value is \b0\b.]"
 "}"
+"[+?The format modifier flag \bL\b can precede the width and/or precision "
+	"specifiers for the \bc\b and \bs\b to cause the width and/or "
+	"precision to be measured in character width rather than byte count.]"
 "[+?When performing conversions of \astring\a to satisfy a numeric "
 	"format specifier, if the first character of \astring\a "
 	"is \b\"\b or \b'\b, then the value will be the numeric value "

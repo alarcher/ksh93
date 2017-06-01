@@ -168,7 +168,7 @@ void	sh_fault(register int sig)
 		}
 	}
 	errno = 0;
-	if(pp->mode==SH_JMPCMD)
+	if(pp->mode==SH_JMPCMD || (pp->mode==1 && shp->bltinfun) && !(flag&SH_SIGIGNORE))
 		shp->lastsig = sig;
 	if(trap)
 	{
@@ -579,6 +579,8 @@ void sh_exit(register int xno)
 #if SHOPT_TYPEDEF
 	shp->mktype = 0;
 #endif /* SHOPT_TYPEDEF*/
+	if(job.in_critical)
+		job_unlock();
 	if(pp->mode == SH_JMPSCRIPT && !pp->prev) 
 		sh_done(shp,sig);
 	if(pp->mode)

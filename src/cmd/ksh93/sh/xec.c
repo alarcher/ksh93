@@ -108,6 +108,7 @@ static void iousepipe(Shell_t *shp)
 	usepipe++;
 	fcntl(subpipe[0],F_SETFD,FD_CLOEXEC);
 	subpipe[2] = fcntl(1,F_DUPFD,10);
+	fcntl(subpipe[2],F_SETFD,FD_CLOEXEC);
 	shp->fdstatus[subpipe[2]] = shp->fdstatus[1];
 	close(1);
 	fcntl(subpipe[1],F_DUPFD,1);
@@ -264,7 +265,7 @@ static int p_comarg(register struct comnod *com)
 		bp->ptr = nv_context(np);
 		bp->data = com->comstate;
 		bp->flags = SH_END_OPTIM;
-		(*funptr(np))(0,(char**)0, bp);
+		((Shbltin_f)funptr(np))(0,(char**)0, bp);
 		bp->ptr = save_ptr;
 		bp->data = save_data;
 	}
@@ -1264,7 +1265,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 						error_info.id = *com;
 						if(argn)
 							shp->exitval = 0;
-						shp->bltinfun = funptr(np);
+						shp->bltinfun = (Shbltin_f)funptr(np);
 						bp->bnode = np;
 						bp->vnode = nq;
 						bp->ptr = nv_context(np);
@@ -1289,7 +1290,9 @@ int sh_exec(register const Shnode_t *t, int flags)
 							tty_check(ERRIO);
 						((Shnode_t*)t)->com.comstate = shp->bltindata.data;
 						bp->data = (void*)save_data;
-						if(!nv_isattr(np,BLT_EXIT) && shp->exitval!=SH_RUNPROG)
+						if(sh.exitval && errno==EINTR && shp->lastsig)
+							sh.exitval = SH_EXITSIG|shp->lastsig;
+						else if(!nv_isattr(np,BLT_EXIT) && shp->exitval!=SH_RUNPROG)
 							shp->exitval &= SH_EXITMASK;
 					}
 					else
@@ -1655,6 +1658,8 @@ int sh_exec(register const Shnode_t *t, int flags)
 			{
 				volatile int jmpval;
 				struct checkpt *buffp = (struct checkpt*)stkalloc(shp->stk,sizeof(struct checkpt));
+				struct ionod *iop;
+				int	rewrite=0;
 				if(no_fork)
 					sh_sigreset(2);
 				sh_pushcontext(shp,buffp,SH_JMPEXIT);
@@ -1718,22 +1723,29 @@ int sh_exec(register const Shnode_t *t, int flags)
 				if(shp->topfd)
 					sh_iounsave(shp);
 				topfd = shp->topfd;
+				if(com0 && (iop=t->tre.treio))
+				{
+					for(;iop;iop=iop->ionxt)
+					{
+						if(iop->iofile&IOREWRITE)
+							rewrite = 1;
+					}
+				}
 				sh_redirect(shp,t->tre.treio,1);
-				if(shp->topfd > topfd)
+				if(rewrite)
 				{
 					job_lock();
 					while((parent = vfork()) < 0)
 						_sh_fork(shp,parent, 0, (int*)0);
-					job_fork(parent);
 					if(parent)
 					{
-						job_clear();
 						job_post(shp,parent,0);
 						job_wait(parent);
 						sh_iorestore(shp,topfd,SH_JMPCMD);
 						sh_done(shp,(shp->exitval&SH_EXITSIG)?(shp->exitval&SH_EXITMASK):0);
 
 					}
+					job_unlock();
 				}
 				if((type&COMMSK)!=TCOM)
 				{
@@ -3490,7 +3502,7 @@ int sh_fun(Namval_t *np, Namval_t *nq, char *argv[])
 			opt_info.index = opt_info.offset = 0;
 			opt_info.disc = 0;
 			shp->exitval = 0;
-			shp->exitval = (*funptr(np))(n,argv,(void*)bp);
+			shp->exitval = ((Shbltin_f)funptr(np))(n,argv,bp);
 		}
 		sh_popcontext(shp,buffp);
 		if(jmpval>SH_JMPCMD)
@@ -3911,7 +3923,7 @@ static pid_t sh_ntfork(Shell_t *shp,const Shnode_t *t,char *argv[],int *jobid,in
 		}
 	fail:
 		if(jobfork && spawnpid<0) 
-			job_fork(spawnpid);
+			job_fork(0);
 		if(spawnpid < 0) switch(errno=shp->path_err)
 		{
 		    case ENOENT:

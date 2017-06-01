@@ -199,7 +199,7 @@ Block_t*	freeb; /* known to be free but not on any free list */
 					{ rv = -1; /**/ASSERT(0); }
 
 				/* must have a self-reference pointer */
-				if(*SELF(b) != b)
+				if(SELF(b) != b)
 					{ rv = -1; /**/ASSERT(0); }
 
 				/* segment pointer should be well-defined */
@@ -437,7 +437,7 @@ int		c;
 			np = NEXT(fp);	/**/ASSERT(ISBUSY(SIZE(np)));
 					/**/ASSERT(!ISJUNK(SIZE(np)));
 			SETPFREE(SIZE(np));
-			*(SELF(fp)) = fp;
+			SELF(fp) = fp;
 
 			if(fp == wanted) /* to be consumed soon */
 			{	/**/ASSERT(!saw_wanted); /* should be seen just once */
@@ -527,7 +527,7 @@ int		local;
 #endif
 {
 	reg Seg_t	*seg, *next;
-	reg Block_t	*bp, *t;
+	reg Block_t	*bp, *tp;
 	reg size_t	size, segsize, round;
 	reg Vmdata_t*	vd = vm->data;
 
@@ -567,8 +567,9 @@ int		local;
 			vd->wild = NIL(Block_t*);
 			vd->pool = 0;
 		}
-		else	REMOVE(vd,bp,INDEX(size),t,bestsearch);
-		CLRPFREE(SIZE(NEXT(bp)));
+		else	REMOVE(vd,bp,INDEX(size),tp,bestsearch);
+		tp = NEXT(bp); /* avoid strict-aliasing pun */
+		CLRPFREE(SIZE(tp));
 
 		if(size < (segsize = seg->size))
 			size += sizeof(Head_t);
@@ -613,7 +614,7 @@ int		local;	/* internal call		*/
 	reg Vmdata_t*	vd = vm->data;
 	reg size_t	s;
 	reg int		n;
-	reg Block_t	*tp, *np;
+	reg Block_t	*tp, *np, *ap;
 	size_t		orgsize = size;
 
 	/**/COUNT(N_alloc);
@@ -679,7 +680,8 @@ int		local;	/* internal call		*/
 		/**/ ASSERT(!vd->free);
 
 		/* tell next block that we are no longer a free block */
-		CLRPFREE(SIZE(NEXT(tp)));	/**/ ASSERT(ISBUSY(SIZE(NEXT(tp))));
+		np = NEXT(tp);
+		CLRPFREE(SIZE(np));	/**/ ASSERT(ISBUSY(SIZE(np)));
 
 		if((s = SIZE(tp)-size) >= (sizeof(Head_t)+BODYSIZE) )
 		{	SIZE(tp) = size;
@@ -690,8 +692,9 @@ int		local;	/* internal call		*/
 
 			if(VMWILD(vd,np))
 			{	SIZE(np) &= ~BITS;
-				*SELF(np) = np; /**/ASSERT(ISBUSY(SIZE(NEXT(np))));
-				SETPFREE(SIZE(NEXT(np)));
+				SELF(np) = np;
+				ap = NEXT(np); /**/ASSERT(ISBUSY(SIZE(ap)));
+				SETPFREE(SIZE(ap));
 				vd->wild = np;
 			}
 			else	vd->free = np;
@@ -1098,10 +1101,14 @@ done:
 #endif
 #if _mem_mmap_anon
 #undef	_mem_mmap_zero
+#if !_PACKAGE_ast
 #undef	_mem_sbrk
 #endif
+#endif
 #if _mem_mmap_zero
+#if !_PACKAGE_ast
 #undef	_mem_sbrk
+#endif
 #endif
 
 #if _SUNOS /* sunos guarantees that brk-addresses are valid */
@@ -1178,7 +1185,7 @@ static Void_t* sbrkmem(Void_t* caddr, size_t csize, size_t nsize)
 	if(brk(addr) != 0 )
 		return NIL(Void_t*);
 	else if(nsize > csize && chkaddr(caddr, nsize) < 0 )
-	{	(void)brk(caddr+csize);
+	{	(void)brk((Vmuchar_t*)caddr+csize);
 		return NIL(Void_t*);
 	}
 	else	return caddr;
@@ -1296,6 +1303,10 @@ static Void_t* getmemory(Vmalloc_t* vm, Void_t* caddr, size_t csize, size_t nsiz
 	if((addr = win32mem(caddr, csize, nsize)) )
 		return (Void_t*)addr;
 #endif
+#if _mem_sbrk
+	if((_Vmassert & VM_break) && (addr = sbrkmem(caddr, csize, nsize)) )
+		return (Void_t*)addr;
+#endif
 #if _mem_mmap_anon
 	if((addr = mmapmem(caddr, csize, nsize, (Mmdisc_t*)0)) )
 		return (Void_t*)addr;
@@ -1305,7 +1316,7 @@ static Void_t* getmemory(Vmalloc_t* vm, Void_t* caddr, size_t csize, size_t nsiz
 		return (Void_t*)addr;
 #endif
 #if _mem_sbrk
-	if((addr = sbrkmem(caddr, csize, nsize)) )
+	if(!(_Vmassert & VM_break) && (addr = sbrkmem(caddr, csize, nsize)) )
 		return (Void_t*)addr;
 #endif
 #if _std_malloc

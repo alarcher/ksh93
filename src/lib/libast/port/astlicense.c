@@ -63,24 +63,27 @@
 #define AUTHOR			0
 #define CLASS			1
 #define COMPANY			2
-#define CONTRIBUTOR		3
-#define CORPORATION		4
-#define DOMAIN			5
-#define ID			6
-#define INCORPORATION		7
-#define LICENSE			8
-#define LOCATION		9
-#define NAME			10
-#define NOTICE			11
-#define ORGANIZATION		12
-#define PACKAGE			13
-#define PARENT			14
-#define QUERY			15
-#define SINCE			16
-#define STYLE			17
-#define URL			18
-#define URLMD5			19
-#define VERSION			20
+#define COMPONENT		3
+#define CONTRIBUTOR		4
+#define CORPORATION		5
+#define DOMAIN			6
+#define ID			7
+#define INCORPORATION		8
+#define LICENSE			9
+#define LOCATION		10
+#define NAME			11
+#define NOTICE			12
+#define ORGANIZATION		13
+#define PACKAGE			14
+#define PARENT			15
+#define QUERY			16
+#define SINCE			17
+#define SOURCE			18
+#define START			19
+#define STYLE			20
+#define URL			21
+#define URLMD5			22
+#define VERSION			23
 
 #define IDS			64
 
@@ -131,6 +134,7 @@ static const Item_t	key[] =
 	KEY("author"),
 	KEY("class"),
 	KEY("company"),
+	KEY("component"),
 	KEY("contributor"),
 	KEY("corporation"),
 	KEY("domain"),
@@ -145,6 +149,8 @@ static const Item_t	key[] =
 	KEY("parent"),
 	KEY("query"),
 	KEY("since"),
+	KEY("source"),
+	KEY("start"),
 	KEY("type"),
 	KEY("url"),
 	KEY("urlmd5"),
@@ -367,10 +373,14 @@ copyright(Notice_t* notice, register Buffer_t* b)
 	copy(b, "Copyright (c) ", -1);
 	if (notice->test)
 		clock = (time_t)1000212300;
-	else
+	else if (!(t = notice->item[SOURCE].data))
+	{
 		time(&clock);
-	t = ctime(&clock) + 20;
-	if ((x = notice->item[SINCE].data) && strncmp(x, t, 4))
+		t = ctime(&clock) + 20;
+	}
+	if ((x = notice->item[START].data) && strncmp(t, x, 4) < 0)
+		t = x;
+	if ((x = notice->item[SINCE].data) && strncmp(x, t, 4) < 0)
 	{
 		expand(notice, b, &notice->item[SINCE]);
 		PUT(b, '-');
@@ -737,6 +747,8 @@ astlicense(char* p, int size, char* file, char* options, int cc1, int cc2, int c
 							notice.type = c;
 							notice.item[CLASS].data = lic[lic[c].quote].data;
 							notice.item[CLASS].size = lic[lic[c].quote].size;
+							if (notice.item[STYLE].data != lic[NONE].data)
+								h = -1;
 							break;
 						}
 					if (h >= 0)

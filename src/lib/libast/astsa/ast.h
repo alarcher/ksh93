@@ -25,10 +25,9 @@
  */
 
 #ifndef _AST_H
-#define _AST_H
+#define _AST_H		1
 
-#include "ast_sa.h"
-
+#include <ast_sa.h>
 #include <ast_common.h>
 
 #include <stdio.h>
@@ -146,6 +145,7 @@ typedef struct
 extern _Ast_info_t	ast;
 
 extern int		astwinsize(int, int*, int*);
+extern int		chresc(const char*, char**);
 extern char*		fmtbuf(size_t);
 extern char*		fmtip4(uint32_t, int);
 extern char*		sfgetr(Sfio_t*, int, int);

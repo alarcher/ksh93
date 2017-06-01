@@ -97,6 +97,7 @@ typedef struct ______mstats Mstats_t;
 **	    abort	if Vmregion==Vmdebug then VM_DBABORT is set,
 **			otherwise _BLD_DEBUG enabled assertions abort()
 **			on failure
+**	    break	try sbrk() block allocator first
 **	    check	if Vmregion==Vmbest then the region is checked every op
 **	    free	disable addfreelist()
 **	    keep	disable free -- if code works with this enabled then it
@@ -154,6 +155,27 @@ static int		_Vmpffd = -1;
 #undef mstats
 #undef realloc
 #undef valloc
+
+#if _malloc_hook
+
+#include <malloc.h>
+
+#undef	calloc
+#undef	cfree
+#undef	free
+#undef	malloc
+#undef	memalign
+#undef	realloc
+
+#define calloc		_ast_calloc
+#define cfree		_ast_cfree
+#define free		_ast_free
+#define malloc		_ast_malloc
+#define memalign	_ast_memalign
+#define realloc		_ast_realloc
+
+#endif
+
 #endif
 
 #if _WINIX
@@ -362,13 +384,13 @@ static void clrfreelist()
 
 	for(; list; list = next)
 	{	next = list->next;
-
-		vm = regionof((Void_t*)list);
-		if(asocasint(&vm->data->lock, 0, 1) == 0) /* can free this now */
-		{	(void)(*vm->meth.freef)(vm, (Void_t*)list, 1);
-			vm->data->lock = 0;
+		if(vm = regionof((Void_t*)list))
+		{	if(asocasint(&vm->data->lock, 0, 1) == 0) /* can free this now */
+			{	(void)(*vm->meth.freef)(vm, (Void_t*)list, 1);
+				vm->data->lock = 0;
+			}
+			else	addfreelist(list); /* ah well, back in the queue */
 		}
-		else	addfreelist(list); /* ah well, back in the queue */
 	}
 }
 
@@ -398,14 +420,16 @@ static Vmalloc_t* getregion(int* local)
 
 	clrfreelist();
 
-	if(asocasint(&Vmregion->data->lock, 0, 1) == 0 )
-	{	*local = 1; /* Vmregion is open, so use it */
-		asoincint(&Regopen);
+	if(Regmax <= 0 )
+	{	/* uni-process/thread */
+		*local = 1;
+		Vmregion->data->lock = 1;
 		return Vmregion;
 	}
-	else if(Regmax <= 0 || Vmregion != Vmheap )
-	{	*local = 0; /* forbidden from making new regions */
-		asoincint(&Reglock);
+	else if(asocasint(&Vmregion->data->lock, 0, 1) == 0 )
+	{	/* Vmregion is open, so use it */
+		*local = 1;
+		asoincint(&Regopen);
 		return Vmregion;
 	}
 
@@ -759,6 +783,59 @@ size_t	size;
 
 #else
 
+#if _malloc_hook
+
+static void vm_free_hook(void* ptr, const void* caller)
+{
+	free(ptr);
+}
+
+static void* vm_malloc_hook(size_t size, const void* caller)
+{
+	void*	r;
+
+	r = malloc(size);
+	return r;
+}
+
+static void* vm_memalign_hook(size_t align, size_t size, const void* caller)
+{
+	void*	r;
+
+	r = memalign(align, size);
+	return r;
+}
+
+static void* vm_realloc_hook(void* ptr, size_t size, const void* caller)
+{
+	void*	r;
+
+	r = realloc(ptr, size);
+	return r;
+}
+
+static void vm_initialize_hook(void)
+{
+	__free_hook = vm_free_hook;
+	__malloc_hook = vm_malloc_hook;
+	__memalign_hook = vm_memalign_hook;
+	__realloc_hook = vm_realloc_hook;
+}
+
+void	(*__malloc_initialize_hook)(void) = vm_initialize_hook;
+
+#if 0 /* 2012-02-29 this may be needed to cover shared libs */
+
+void __attribute__ ((constructor)) vm_initialize_initialize_hook(void)
+{
+	vm_initialize_hook();
+	__malloc_initialize_hook = vm_initialize_hook;
+}
+
+#endif
+
+#else
+
 /* intercept _* __* __libc_* variants */
 
 #if __lib__malloc
@@ -811,6 +888,8 @@ extern Void_t*	F2(__libc_realloc, Void_t*,p, size_t,n) { return realloc(p, n); }
 extern Void_t*	F1(__libc_valloc, size_t,n) { return valloc(n); }
 #endif
 #endif
+
+#endif /* _malloc_hook */
 
 #endif /* _map_malloc */
 
@@ -916,6 +995,8 @@ extern Mstats_t mstats()
  * _ast_* counterparts for object compatibility
  */
 
+#define setregmax(n)
+
 #undef	calloc
 extern Void_t*	calloc _ARG_((size_t, size_t));
 
@@ -950,17 +1031,22 @@ extern Void_t*	valloc _ARG_((size_t));
 #define extern		__EXPORT__
 #endif
 
-extern Void_t*	F2(_ast_calloc, size_t,n, size_t,m) { return calloc(n, m); }
-extern Void_t	F1(_ast_cfree, Void_t*,p) { free(p); }
+#if !_malloc_hook
+
 extern Void_t	F1(_ast_free, Void_t*,p) { free(p); }
 extern Void_t*	F1(_ast_malloc, size_t,n) { return malloc(n); }
 #if _lib_memalign
 extern Void_t*	F2(_ast_memalign, size_t,a, size_t,n) { return memalign(a, n); }
 #endif
+extern Void_t*	F2(_ast_realloc, Void_t*,p, size_t,n) { return realloc(p, n); }
+
+#endif
+
+extern Void_t*	F2(_ast_calloc, size_t,n, size_t,m) { return calloc(n, m); }
+extern Void_t	F1(_ast_cfree, Void_t*,p) { free(p); }
 #if _lib_pvalloc
 extern Void_t*	F1(_ast_pvalloc, size_t,n) { return pvalloc(n); }
 #endif
-extern Void_t*	F2(_ast_realloc, Void_t*,p, size_t,n) { return realloc(p, n); }
 #if _lib_valloc
 extern Void_t*	F1(_ast_valloc, size_t,n) { return valloc(n); }
 #endif
@@ -983,7 +1069,11 @@ extern Void_t*	F1(_ast_valloc, size_t,n) { return valloc(n); }
 
 #if !_UWIN
 
+#if !_malloc_hook
+
 #include	<malloc.h>
+
+#endif
 
 typedef struct mallinfo Mallinfo_t;
 typedef struct mstats Mstats_t;
@@ -1199,6 +1289,9 @@ void _vmoptions()
 				else
 					_Vmassert |= VM_abort;
 				break;
+			case 'b':		/* break */
+				_Vmassert |= VM_break;
+				break;
 			case 'c':		/* check */
 				_Vmassert |= VM_check;
 				break;
@@ -1281,13 +1374,19 @@ void _vmoptions()
 		Vmregion = vm;
 	}
 
-	/* enable tracing */
+	/* enable tracing -- this currently disables multiple regions */
 
-	if (trace && (fd = createfile(trace)) >= 0)
+	if (trace)
 	{
-		vmset(Vmregion, VM_TRACE, 1);
-		vmtrace(fd);
+		setregmax(0);
+		if ((fd = createfile(trace)) >= 0)
+		{
+			vmset(Vmregion, VM_TRACE, 1);
+			vmtrace(fd);
+		}
 	}
+	else if (Vmregion != Vmheap || asometh(0, 0)->type == ASO_SIGNAL)
+		setregmax(0);
 
 	/* make sure that profile data is output upon exiting */
 
@@ -1333,7 +1432,7 @@ int	v;
 		_Vmassert |= VM_keep;
 	else
 		_Vmassert &= ~VM_keep;
-	return v;
+	return r;
 }
 
 #endif /*_UWIN*/

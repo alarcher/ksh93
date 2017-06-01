@@ -1,14 +1,14 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#                     Copyright (c) 1994-2012 AT&T                     #
+#          Copyright (c) 1994-2012 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
-#                  Common Public License, Version 1.0                  #
-#                               by AT&T                                #
+#                 Eclipse Public License, Version 1.0                  #
+#                    by AT&T Intellectual Property                     #
 #                                                                      #
 #                A copy of the License is available at                 #
-#            http://www.opensource.org/licenses/cpl1.0.txt             #
-#         (with md5 checksum 059e8cd6165cb4c31e351f2b69388fd9)         #
+#          http://www.eclipse.org/org/documents/epl-v10.html           #
+#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
 #                                                                      #
 #              Information and Software Systems Research               #
 #                            AT&T Research                             #
@@ -21,11 +21,38 @@
 # package - source and binary package control
 # Glenn Fowler <gsf@research.att.com>
 
+command=package
+
 case $-:$BASH_VERSION in
 *x*:[0123456789]*)	: bash set -x is broken :; set +ex ;;
 esac
 
-command=package
+# ksh checks -- ksh between 2007-11-05 and 2011-11-11 conflict with new -lcmd -- wea culpa
+checksh()
+{
+	egrep 'Version.*(88|1993)' $1 >/dev/null 2>&1 ||
+	$1 -c '(( .sh.version >= 20111111 ))' >/dev/null 2>&1
+}
+
+case $_AST_BIN_PACKAGE_:$SHELL:$0 in
+1:*|*:/bin/sh:*)
+	;;
+*:*/*:*/*)
+	_AST_BIN_PACKAGE_=1 # prevent non-interactive sh .rc referencing bin/package recursion #
+	export _AST_BIN_PACKAGE_
+	if	checksh $SHELL
+	then	: no -lcmd conflict :
+	else	case " $* " in
+		*" debug "*|*" DEBUG "*|*" show "*)
+			echo $command: $SHELL: warning: possible -lcmd conflict -- falling back to /bin/sh >&2
+			;;
+		esac
+		SHELL=/bin/sh
+		export SHELL
+		exec $SHELL "$0" "$@"
+	fi
+	;;
+esac
 
 LC_ALL=C
 export LC_ALL
@@ -33,7 +60,7 @@ export LC_ALL
 src="cmd contrib etc lib"
 use="/usr/common /exp /usr/local /usr/add-on /usr/addon /usr/tools /usr /opt"
 usr="/home"
-lib="/usr/local/lib /usr/local/shlib"
+lib="" # nee /usr/local/lib /usr/local/shlib
 ccs="/usr/kvm /usr/ccs/bin"
 org="gnu GNU"
 makefiles="Mamfile Nmakefile nmakefile Makefile makefile"
@@ -70,7 +97,7 @@ all_types='*.*|sun4'		# all but sun4 match *.*
 case `(getopts '[-][123:xyz]' opt --xyz; echo 0$opt) 2>/dev/null` in
 0123)	USAGE=$'
 [-?
-@(#)$Id: package (AT&T Research) 2011-10-26 $
+@(#)$Id: package (AT&T Research) 2012-02-29 $
 ]'$USAGE_LICENSE$'
 [+NAME?package - source and binary package control]
 [+DESCRIPTION?The \bpackage\b command controls source and binary
@@ -174,6 +201,9 @@ case `(getopts '[-][123:xyz]' opt --xyz; echo 0$opt) 2>/dev/null` in
                     \bwrite\b action error counts. A non-numeric value in
                     any of these fields disables the corresponding action.]
             }
+	[+clean | clobber?Delete the \barch/\b\aHOSTTYPE\a hierarchy; this
+	    deletes all generated files and directories for \aHOSTTYPE\a.
+	    The heirarchy can be rebuilt by \bpackage make\b.]
         [+contents\b [ \apackage\a ... ]]?List description and
             components for \apackage\a on the standard output.]
         [+copyright\b [ \apackage\a ... ]]?List the general copyright
@@ -560,7 +590,7 @@ do	case $# in
 	0)	set host type ;;
 	esac
 	case $1 in
-	admin|contents|copyright|export|host|install|license|list|make|read|regress|release|remove|results|setup|test|update|use|verify|view|write|TEST)
+	admin|clean|clobber|contents|copyright|export|host|install|license|list|make|read|regress|release|remove|results|setup|test|update|use|verify|view|write|TEST)
 		action=$1
 		shift
 		break
@@ -987,6 +1017,10 @@ ${bT}(5)${bD}Read all unread package archive(s):${bX}
 		   M T W   The admin action make, test and write action error
 			   counts. A non-numeric value in any of these fields
 			   disables the corresponding action.
+	clean | clobber
+	    Delete the arch/HOSTTYPE hierarchy; this deletes all generated
+	    files and directories for HOSTTYPE. The heirarchy can be rebuilt
+	    by package make.]
 	contents [ package ... ]
 		List description and components for PACKAGE on the standard
 		output.
@@ -2388,7 +2422,8 @@ int main()
 				*) abi=-64 ;;
 				esac
 				;;
-			*)	cd ${TMPDIR:-/tmp}
+			*)	pwd=`pwd`
+				cd ${TMPDIR:-/tmp}
 				tmp=hi$$
 				trap 'rm -f $tmp.*' 0 1 2
 				cat > $tmp.a.c <<!
@@ -2420,6 +2455,9 @@ int b() { return 0; }
 						fi
 					done
 				fi </dev/null >/dev/null 2>&1
+				rm -f $tmp.*
+				trap - 0 1 2
+				cd $pwd
 				;;
 			esac
 			case $type$abi in
@@ -2436,6 +2474,29 @@ int b() { return 0; }
 			sgi.mips[456789]-64)
 				;;
 			*)	type=$type$abi
+				;;
+			esac
+			;;
+		*)	case $bits in
+			'')	case `file /bin/sh 2>/dev/null` in
+				*universal*64*)
+					pwd=`pwd`
+					cd ${TMPDIR:-/tmp}
+					tmp=hi$$
+					trap 'rm -f $tmp.*' 0 1 2
+					cat > $tmp.a.c <<!
+int main() { return 0; }
+!
+					if	$cc -o $tmp.a.exe $tmp.a.c
+					then	case `file $tmp.a.exe` in
+						*64*)	bits=64 ;;
+						esac
+					fi </dev/null >/dev/null 2>&1
+					rm -f $tmp.*
+					trap - 0 1 2
+					cd $pwd
+					;;
+				esac
 				;;
 			esac
 			;;
@@ -2722,12 +2783,16 @@ case $x in
 			esac
 		}
 
-		for i in arch arch/$HOSTTYPE
-		do	test -d $PACKAGEROOT/$i || $exec mkdir $PACKAGEROOT/$i || exit
-		done
-		for i in lib
-		do	test -d $INSTALLROOT/$i || $exec mkdir $INSTALLROOT/$i || exit
-		done
+		case $action in
+		admin)	;;
+		*)	for i in arch arch/$HOSTTYPE
+			do	test -d $PACKAGEROOT/$i || $exec mkdir $PACKAGEROOT/$i || exit
+			done
+			for i in lib
+			do	test -d $INSTALLROOT/$i || $exec mkdir $INSTALLROOT/$i || exit
+			done
+			;;
+		esac
 
 		# no $INITROOT means INIT already installed elsewhere
 
@@ -3005,14 +3070,7 @@ cat $INITROOT/$i.sh
 	case $KEEP_SHELL in
 	0)	executable "$SHELL" || SHELL=
 		case $SHELL in
-		?*)	case `$SHELL -c 'echo $KSH_VERSION' 2>&1` in
-			Version*????-??-??)
-				;;
-			?*)	: any output here means $SHELL is not reliable for scripting
-				SHELL=
-				;;
-			esac
-			;;
+		?*)	checksh $SHELL || SHELL= ;;
 		esac
 		case $SHELL in
 		''|/bin/*|/usr/bin/*)
@@ -3020,13 +3078,9 @@ cat $INITROOT/$i.sh
 			'')	SHELL=/bin/sh ;;
 			esac
 			for i in ksh sh bash
-			do	if	onpath $i
-				then	case `$_onpath_ -c 'echo $KSH_VERSION' 2>&1` in
-					Version*????-??-??|'')
-						SHELL=$_onpath_
-						break
-						;;
-					esac
+			do	if	onpath $i && checksh $_onpath_
+				then	SHELL=$_onpath_
+					break
 				fi
 			done
 			;;
@@ -4382,6 +4436,7 @@ admin)	while	test ! -f $admin_db
 			*)	user=
 				;;
 			esac
+			: type=$type host=$host root=$root date=$date time=$time make=$make test=$test write=$write :
 			name=$host
 			host=`echo $name | sed 's,[^abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789],__,g'`
 			eval x='$'${host}_index
@@ -4607,6 +4662,30 @@ admin)	while	test ! -f $admin_db
 		remote_hosts=$remote
 		;;
 	esac
+	for host in $remote_hosts $local_hosts
+	do	eval share=\$${host}_share
+		case $share in
+		?*)	while	:
+			do	oshare=$share
+				for s in $share
+				do	eval r='$'${s}_share
+					case $r in
+					?*)	case " $share " in
+						*" $r "*)	;;
+						*)		share="$share $r" ;;
+						esac
+						;;
+					esac
+				done
+				case $share in
+				$oshare)	eval ${host}_share="'$share'"
+						break
+						;;
+				esac
+			done
+			;;
+		esac
+	done
 	for host in $remote_hosts
 	do	eval type=\$${host}_type
 		case " $local_types " in
@@ -4877,6 +4956,12 @@ admin)	while	test ! -f $admin_db
 		mv $admin_db.new $admin_db
 		;;
 	esac
+	;;
+
+clean|clobber)
+	cd $PACKAGEROOT
+	$exec rm -rf $INSTALLROOT
+	exit
 	;;
 
 contents|list)
@@ -5413,7 +5498,7 @@ make|view)
 
 	# check $CC and { ar cc ld ldd } intercepts
 
-	h=$HOSTTYPE
+	h="${HOSTTYPE} ${HOSTTYPE}.*"
 	case $HOSTTYPE in
 	*.*)	t=`echo $HOSTTYPE | sed 's/[.][^.]*//'`
 		h="$h $t"
@@ -5432,52 +5517,55 @@ make|view)
 		b=$INSTALLROOT/bin/$c
 		t=$INSTALLROOT/lib/package/gen/$c.tim
 		intercept=0
-		for a in $h
-		do	s=$INITROOT/$c.$a
-			test -x "$s" || continue
-			if	cmp -s "$s" "$b" >/dev/null 2>&1
-			then	intercept=1
-				break
-			fi
-			case `ls -t "$t" "$b" "$s" 2>/dev/null` in
-			$t*)	;;
-			$b*)	cc=$b
-				;;
-			$s*)	cd $INSTALLROOT/lib/package/gen
-				tmp=pkg$$
-				eval '$'exec echo "'int main(){return 0;}' > $tmp.c"
-				if	$exec $s -o $tmp.exe $tmp.c >/dev/null 2>&1 &&
-					test -x $tmp.exe
-				then	case $HOSTTYPE in
-					*.mips*)$s -version >/dev/null 2>&1 || s= ;;
-					esac
-					case $s in
-					?*)	$exec sed "s/^HOSTTYPE=.*/HOSTTYPE=$HOSTTYPE/" < "$s" > "$b" || exit
-						$exec chmod +x "$b" || exit
-						cc=$b
-						intercept=1
-						note update $b
-						;;
-					esac
+		for k in $h
+		do	for s in $INITROOT/$c.$k
+			do	test -x "$s" || continue
+				if	cmp -s "$s" "$b" >/dev/null 2>&1
+				then	intercept=1
+					break 2
 				fi
-				$exec rm -f $tmp.*
-				$exec touch "$t"
-				cd $PACKAGEROOT
-				;;
-			esac
+				case `ls -t "$t" "$b" "$s" 2>/dev/null` in
+				$t*)	;;
+				$b*)	cc=$b
+					;;
+				$s*)	cd $INSTALLROOT/lib/package/gen
+					tmp=pkg$$
+					eval '$'exec echo "'int main(){return 0;}' > $tmp.c"
+					if	$exec $s -o $tmp.exe $tmp.c >/dev/null 2>&1 &&
+						test -x $tmp.exe
+					then	case $HOSTTYPE in
+						*.mips*)$s -version >/dev/null 2>&1 || s= ;;
+						esac
+						case $s in
+						?*)	$exec sed "s/^HOSTTYPE=.*/HOSTTYPE=$HOSTTYPE/" < "$s" > "$b" || exit
+							$exec chmod +x "$b" || exit
+							cc=$b
+							intercept=1
+							note update $b
+							;;
+						esac
+					fi
+					$exec rm -f $tmp.*
+					$exec touch "$t"
+					cd $PACKAGEROOT
+					;;
+				esac
+				break 2
+			done
 		done
 		case $intercept in
 		1)	c=ld
 			b=$INSTALLROOT/bin/$c
-			for t in $h
-			do	s=$INITROOT/$c.$t
-				test -x "$s" || continue
-				case `ls -t "$b" "$s" 2>/dev/null` in
-				$b*)	;;
-				$s*)	$exec cp "$s" "$b"
-					note update $b
-					;;
-				esac
+			for k in $h
+			do	for s in $INITROOT/$c.$k
+				do	test -x "$s" || continue
+					case `ls -t "$b" "$s" 2>/dev/null` in
+					$b*)	;;
+					$s*)	$exec cp "$s" "$b"
+						note update $b
+						;;
+					esac
+				done
 			done
 			;;
 		esac
