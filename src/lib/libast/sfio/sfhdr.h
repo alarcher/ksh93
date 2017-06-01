@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -360,8 +360,8 @@
 #define SFMBCPY(to,fr)
 #define SFMBCLR(mb)
 #define SFMBSET(lhs,v)
-#define SFMBLEN(s,mb)		(*(s) ? 1 : 0)
 #define SFMBDCL(mb)
+#define SFMBLEN(s,mb)		(*(s) ? 1 : 0)
 #endif /* _has_multibyte */
 
 /* dealing with streams that might be accessed concurrently */
@@ -438,6 +438,9 @@
 /* functions for polling readiness of streams */
 #if _lib_select
 #undef _lib_poll
+#if _sys_select
+#include	<sys/select.h>
+#endif
 #else
 #if _lib_poll_fd_1 || _lib_poll_fd_2
 #define _lib_poll	1
@@ -468,7 +471,7 @@
 #endif
 
 /* alternative process forking */
-#if _lib_vfork && !defined(fork) && !defined(sparc) && !defined(__sparc)
+#if _lib_vfork && !defined(fork) && !defined(__sparc) && !defined(__sparc__)
 #if _hdr_vfork
 #include	<vfork.h>
 #endif
@@ -615,6 +618,8 @@
 #	endif /*FIOCLEX*/
 #endif /*F_SETFD*/
 
+#define SF_FD_CLOEXEC			0x0001
+
 /* a couple of error number that we use, default values are like Linux */
 #ifndef EINTR
 #define EINTR	4
@@ -642,7 +647,7 @@
 	do if (*(dp) == 0) { \
 		Lc_numeric_t*	lv = (Lc_numeric_t*)LCINFO(AST_LC_NUMERIC)->data; \
 		*(dp) = lv->decimal; \
-		if (tp) *(tp) = lv->thousand; \
+		*(tp) = lv->thousand; \
 	} while (0)
 #endif /*!defined(SFSETLOCALE) && _PACKAGE_ast*/
 
@@ -652,11 +657,11 @@
 	do { struct lconv*	lv; \
 	  if(*(decimal) == 0) \
 	  { *(decimal) = '.'; \
-	    if (thousand) *(thousand) = -1; \
+	    *(thousand) = -1; \
 	    if((lv = localeconv())) \
 	    { if(lv->decimal_point && *lv->decimal_point) \
 	    	*(decimal) = *(unsigned char*)lv->decimal_point; \
-	      if(thousand && lv->thousands_sep && *lv->thousands_sep) \
+	      if(lv->thousands_sep && *lv->thousands_sep) \
 	    	*(thousand) = *(unsigned char*)lv->thousands_sep; \
 	    } \
 	  } \
@@ -664,7 +669,7 @@
 #endif /*!defined(SFSETLOCALE) && _lib_locale*/
 
 #if !defined(SFSETLOCALE)
-#define SFSETLOCALE(decimal,thousand)	(*(decimal)='.')
+#define SFSETLOCALE(decimal,thousand)	(*(decimal)='.',*(thousand)=-1)
 #endif
 
 /* stream pool structure. */
@@ -793,6 +798,7 @@ struct _fmtpos_s
 #define SFFMT_CLASS	040		/* %[			*/
 
 /* local variables used across sf-functions */
+typedef void  (*Sfnotify_f)_ARG_((Sfio_t*, int, void*));
 #define _Sfpage		(_Sfextern.sf_page)
 #define _Sfpool		(_Sfextern.sf_pool)
 #define _Sfpmove	(_Sfextern.sf_pmove)
@@ -1188,7 +1194,7 @@ extern char**		_sfgetpath _ARG_((char*));
 extern Sfextern_t	_Sfextern;
 
 extern int		_sfmode _ARG_((Sfio_t*, int, int));
-extern int		_sftype _ARG_((const char*, int*, int*));
+extern int		_sftype _ARG_((const char*, int*, int*, int*));
 
 #undef	extern
 
@@ -1201,7 +1207,7 @@ extern int		errno;
 #if _ast_fltmax_double
 #define frexpl		frexp
 #endif
-#if !__STDC__
+#if !_lib_frexpl
 extern Sfdouble_t	frexpl _ARG_((Sfdouble_t, int*));
 #endif
 #endif
@@ -1209,7 +1215,7 @@ extern Sfdouble_t	frexpl _ARG_((Sfdouble_t, int*));
 #if _ast_fltmax_double
 #define ldexpl		ldexp
 #endif
-#if !__STDC__
+#if !_lib_ldexpl
 extern Sfdouble_t	ldexpl _ARG_((Sfdouble_t, int));
 #endif
 #endif

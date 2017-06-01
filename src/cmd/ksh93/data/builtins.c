@@ -37,9 +37,14 @@
 #   define bltin(x)	0
 #endif
 
-#if defined(SHOPT_CMDLIB_DIR) && !defined(SHOPT_CMDLIB_HDR)
+#ifndef SHOPT_CMDLIB_DIR
+#   define SHOPT_CMDLIB_DIR	SH_CMDLIB_DIR
+#else
+#   ifndef SHOPT_CMDLIB_HDR
 #	define SHOPT_CMDLIB_HDR	<cmdlist.h>
+#   endif
 #endif
+
 #define Q(f)		#f	/* libpp cpp workaround -- fixed 2005-04-11 */
 #define CMDLIST(f)	SH_CMDLIB_DIR "/" Q(f), NV_BLTIN|NV_BLTINOPT|NV_NOFREE, bltin(f),
 
@@ -73,8 +78,8 @@ const struct shtable3 shtab_builtins[] =
 #if _bin_newgrp || _usr_bin_newgrp
 	"newgrp",	NV_BLTIN|BLT_ENV|BLT_SPC,	Bltin(login),
 #endif	/* _bin_newgrp || _usr_bin_newgrp */
-	"alias",	NV_BLTIN|BLT_SPC|BLT_DCL,	bltin(alias),
-	"hash",		NV_BLTIN|BLT_SPC|BLT_DCL,	bltin(alias),
+	"alias",	NV_BLTIN|BLT_SPC,		bltin(alias),
+	"hash",		NV_BLTIN|BLT_SPC,		bltin(alias),
 	"enum",		NV_BLTIN|BLT_ENV|BLT_SPC|BLT_DCL,bltin(enum),
 	"eval",		NV_BLTIN|BLT_ENV|BLT_SPC|BLT_EXIT,bltin(eval),
 	"exit",		NV_BLTIN|BLT_ENV|BLT_SPC,	bltin(return),
@@ -123,6 +128,7 @@ const struct shtable3 shtab_builtins[] =
 	"type",		NV_BLTIN|BLT_ENV,		bltin(whence),
 	"whence",	NV_BLTIN|BLT_ENV,		bltin(whence),
 #ifdef SHOPT_CMDLIB_HDR
+#undef	mktemp		/* undo possible map-libc mktemp => _ast_mktemp */
 #include SHOPT_CMDLIB_HDR
 #else
 	CMDLIST(basename)
@@ -199,6 +205,9 @@ const char sh_set[] =
 	"their current settings will be written to standard output.  When "
 	"invoked with a \b+\b the options will be written in a format "
 	"that can be reinput to the shell to restore the settings. "
+	"Options \b-o\b \aname\a can also be specified with \b--\b\aname\a "
+	"and \b+o \aname\a can be specifed with \b--no\b\aname\a  except that "
+	"options names beginning with \bno\b are turned on by omitting \bno\b."
 	"This option can be repeated to enable/disable multiple options. "
 	"The value of \aoption\a must be one of the following:]{"
 		"[+allexport?Equivalent to \b-a\b.]"
@@ -252,6 +261,7 @@ const char sh_set[] =
 			"command to exit with non-zero exit status, or will "
 			"be zero if all commands return zero exit status.]"
 		"[+privileged?Equivalent to \b-p\b.]"
+		"[+rc?Do not run the \b.kshrc\b file for interactive shells.]"
 		"[+showme?Simple commands preceded by a \b;\b will be traced "
 			"as if \b-x\b were enabled but not executed.]"
 		"[+trackall?Equivalent to \b-h\b.]"
@@ -991,7 +1001,7 @@ USAGE_LICENSE
 ;
 
 const char sh_optkill[]	 = 
-"[-1c?\n@(#)$Id: kill (AT&T Research) 1999-06-17 $\n]"
+"[-1c?\n@(#)$Id: kill (AT&T Research) 2012-04-13 $\n]"
 USAGE_LICENSE
 "[+NAME?kill - terminate or signal process]"
 "[+DESCRIPTION?With the first form in which \b-l\b is not specified, "
@@ -1011,6 +1021,8 @@ _JOB_
 "[l?List signal names or signal numbers rather than sending signals as "
 	"described above.  "
 	"The \b-n\b and \b-s\b options cannot be specified.]"
+"[L?Same as \b-l\b except that of no argument is specified the signals will "
+	"be listed in menu format as with select compound command.]"
 "[n]#[signum?Specify a signal number to send.  Signal numbers are not "
 	"portable across platforms, except for the following:]{"
 		"[+0?No signal]"
@@ -1143,7 +1155,9 @@ USAGE_LICENSE
 	"[+%q?Output \astring\a quoted in a manner that it can be read in "
 		"by the shell to get back the same string.  However, empty "
 		"strings resulting from missing \astring\a operands will "
-		"not be quoted.]"
+		"not be quoted. When \bq\b is preceded by the alternative "
+		"format specifier, \b#\b, the string is quoted in manner "
+		" suitable as a field in a \b.csv\b format file.]"
 	"[+%B?Treat the argument as a variable name and output the value "
 		"without converting it to a string.  This is most useful for "
 		"variables of type \b-b\b.]"
@@ -1160,6 +1174,7 @@ USAGE_LICENSE
 		"\adformat\a is a date format as defined by the \bdate\b "
 		"command.]"
 	"[+%Z?Output a byte whose value is \b0\b.]"
+	"\fextra\f"
 "}"
 "[+?The format modifier flag \bL\b can precede the width and/or precision "
 	"specifiers for the \bc\b and \bs\b to cause the width and/or "
@@ -1182,12 +1197,14 @@ USAGE_LICENSE
 		"the collating element \aname\a.]"
 	"[+-?The escape sequence \b\\x{\b\ahex\a\b}\b expands to the "
 		"character corresponding to the hexidecimal value \ahex\a.]"
+	"[+-?The escape sequence \b\\u{\b\ahex\a\b}\b expands to the unicode "
+		"character corresponding to the hexidecimal value \ahex\a.]"
 	"[+-?The format modifier flag \b=\b can be used to center a field to "
 		"a specified width.]"
 	"[+-?The format modifier flag \bL\b can be used with the \bc\b and "
 		"\bs\b formats to treat precision as character width instead "
 		"of byte count.]"
-	"[+-?The format modifier flag \b,\b can be used with \bd\b and \bf\f "
+	"[+-?The format modifier flag \b,\b can be used with \bd\b and \bf\b "
 		"formats to cause group of digits.]"
 	"[+-?Each of the integral format specifiers can have a third "
 		"modifier after width and precision that specifies the "

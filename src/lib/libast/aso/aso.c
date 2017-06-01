@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -22,6 +22,7 @@
 #pragma prototyped
 
 #include "asohdr.h"
+#include "FEATURE/aso"
 
 #if defined(_UWIN) && defined(_BLD_ast)
 
@@ -178,7 +179,7 @@ asoerror(int type, const char* format, const char* a, const char* b, long n)
  *
  * the user visible asometh() calls this function
  * it allows, e.g., for -ltaso to provide an asometh() intercept
- * that prepend its ASO_THREAD methods ahead of the _asometh() methods
+ * that prepends its ASO_THREAD methods ahead of the _asometh() methods
  */
 
 Asometh_t*
@@ -255,7 +256,7 @@ asoinit(const char* details, Asometh_t* meth, Asodisc_t* disc)
 		state.hung--;
 	}
 	if (!meth)
-		return 0;
+		return state.pid != 0;
 	if (!meth->lockf && !(meth->type & ASO_INTRINSIC))
 	{
 		if (state.errorf)

@@ -104,6 +104,7 @@ typedef struct ______mstats Mstats_t;
 **	    		probably accesses free'd data
 **	    method=m	sets Vmregion=m if not defined, m (Vm prefix optional)
 **			may be one of { best debug last profile }
+**	    mmap	try mmap() block allocator first
 **	    period=n	sets Vmregion=Vmdebug if not defined, if
 **			Vmregion==Vmdebug the region is checked every n ops
 **	    profile=f	sets Vmregion=Vmprofile if not set, if
@@ -1160,6 +1161,31 @@ char*	ends;
 	return begs;
 }
 
+#define FD_PRIVATE	(3*OPEN_MAX/4)
+
+#if __STD_C
+int _vmfd(int fd)
+#else
+int _vmfd(fd)
+int	fd;
+#endif
+{
+	int	pd;
+
+	if (fd >= 0)
+	{
+		if (fd < FD_PRIVATE && (pd = fcntl(fd, F_DUPFD, FD_PRIVATE)) >= 0)
+		{
+			close(fd);
+			fd = pd;
+		}
+#ifdef FD_CLOEXEC
+		fcntl(fd,  F_SETFD, FD_CLOEXEC);
+#endif
+	}
+	return fd;
+}
+
 #if __STD_C
 static int createfile(char* file)
 #else
@@ -1200,11 +1226,14 @@ char*	file;
 	if (*file == '&' && *(file += 1) || strncmp(file, "/dev/fd/", 8) == 0 && *(file += 8))
 		fd = dup((int)atou(&file));
 	else if (*file)
+	{
 #if _PACKAGE_ast
 		fd = open(file, O_WRONLY|O_CREAT|O_TRUNC, CREAT_MODE);
 #else
 		fd = creat(file, CREAT_MODE);
 #endif
+		fd = _vmfd(fd);
+	}
 	else
 		return -1;
 #if _PACKAGE_ast
@@ -1302,19 +1331,28 @@ void _vmoptions()
 				_Vmassert |= VM_keep;
 				break;
 			case 'm':
-				if (v && !vm)
-				{
-					if ((v[0] == 'V' || v[0] == 'v') && (v[1] == 'M' || v[1] == 'm'))
-						v += 2;
-					if (strcmp(v, "debug") == 0)
-						vm = vmopen(Vmdcsystem, Vmdebug, 0);
-					else if (strcmp(v, "profile") == 0)
-						vm = vmopen(Vmdcsystem, Vmprofile, 0);
-					else if (strcmp(v, "last") == 0)
-						vm = vmopen(Vmdcsystem, Vmlast, 0);
-					else if (strcmp(v, "best") == 0)
-						vm = Vmheap;
-				}
+				if (v)
+					switch (t[1])
+					{
+					case 'e': /* method=METHOD */
+						if (!vm)
+						{
+							if ((v[0] == 'V' || v[0] == 'v') && (v[1] == 'M' || v[1] == 'm'))
+								v += 2;
+							if (strcmp(v, "debug") == 0)
+								vm = vmopen(Vmdcsystem, Vmdebug, 0);
+							else if (strcmp(v, "profile") == 0)
+								vm = vmopen(Vmdcsystem, Vmprofile, 0);
+							else if (strcmp(v, "last") == 0)
+								vm = vmopen(Vmdcsystem, Vmlast, 0);
+							else if (strcmp(v, "best") == 0)
+								vm = Vmheap;
+						}
+						break;
+					case 'm': /* mmap */
+						_Vmassert |= VM_mmap;
+						break;
+					}
 				break;
 			case 'p':
 				if (v)

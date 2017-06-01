@@ -112,10 +112,32 @@ int	b_cd(int argc, char *argv[],Shbltin_t *context)
 	if(*dir=='.')
 	{
 		/* test for pathname . ./ .. or ../ */
-		if(*(dp=dir+1) == '.')
-			dp++;
-		if(*dp==0 || *dp=='/')
+		int	n=0;
+		char	*sp;
+		for(dp=dir; *dp=='.'; dp++)
+		{
+			if(*++dp=='.' && (*++dp=='/' || *dp==0))
+				n++;
+			else if(*dp && *dp!='/')
+				break;
+			if(*dp==0)
+				break;
+		}
+		if(n)	
+		{
 			cdpath = 0;
+			sp = oldpwd + strlen(oldpwd);
+			while(n--)
+			{
+				while(--sp > oldpwd && *sp!='/');
+				if(sp==oldpwd)
+					break;
+				
+			}
+			sfwrite(shp->strbuf,oldpwd,sp+1-oldpwd);
+			sfputr(shp->strbuf,dp,0);
+			dir = sfstruse(shp->strbuf);
+		}
 	}
 	rval = -1;
 	do
@@ -191,8 +213,6 @@ success:
 	if(*dir != '/')
 		return(0);
 	nv_putval(opwdnod,oldpwd,NV_RDONLY);
-	if(oldpwd)
-		free(oldpwd);
 	flag = strlen(dir);
 	/* delete trailing '/' */
 	while(--flag>0 && dir[flag]=='/')
@@ -203,6 +223,8 @@ success:
 	nv_scan(shp->track_tree,rehash,(void*)0,NV_TAGGED,NV_TAGGED);
 	path_newdir(shp,shp->pathlist);
 	path_newdir(shp,shp->cdpathlist);
+	if(oldpwd)
+		free(oldpwd);
 	return(0);
 }
 

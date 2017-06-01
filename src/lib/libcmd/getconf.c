@@ -27,7 +27,7 @@
  */
 
 static const char usage[] =
-"[-?\n@(#)$Id: getconf (AT&T Research) 2008-04-24 $\n]"
+"[-?\n@(#)$Id: getconf (AT&T Research) 2012-06-25 $\n]"
 USAGE_LICENSE
 "[+NAME?getconf - get configuration values]"
 "[+DESCRIPTION?\bgetconf\b displays the system configuration value for"
@@ -104,15 +104,18 @@ USAGE_LICENSE
 "\n[ name [ path [ value ] ] ... ]\n"
 "\n"
 
-"[+ENVIRONMENT]{"
-"	[+_AST_FEATURES?Process local writable values that are different from"
-"		the default are stored in the \b_AST_FEATURES\b environment"
-"		variable. The \b_AST_FEATURES\b value is a space-separated"
-"		list of \aname\a \apath\a \avalue\a 3-tuples, where"
-"		\aname\a is the system configuration name, \apath\a is the"
-"		corresponding path, \b-\b if no path is applicable, and"
-"		\avalue\a is the system configuration value.]"
-"}"
+"[+ENVIRONMENT]"
+    "{"
+        "[+_AST_FEATURES?Process local writable values that are "
+            "different from the default are stored in the \b_AST_FEATURES\b "
+            "environment variable. The \b_AST_FEATURES\b value is a "
+            "space-separated list of \aname\a \apath\a \avalue\a 3-tuples, "
+            "where \aname\a is the system configuration name, \apath\a is "
+            "the corresponding path, \b-\b if no path is applicable, and "
+            "\avalue\a is the system configuration value. \b_AST_FEATURES\b "
+            "is an implementation detail of process inheritance; it may "
+            "change or vanish in the future; don't rely on it.]"
+    "}"
 "[+SEE ALSO?\bpathchk\b(1), \bconfstr\b(2), \bpathconf\b(2),"
 "	\bsysconf\b(2), \bastgetconf\b(3)]"
 ;
@@ -239,7 +242,8 @@ b_getconf(int argc, char** argv, Shbltin_t* context)
 		astconflist(sfstdout, path, flags, pattern);
 	else
 	{
-		flags = native ? (ASTCONF_system|ASTCONF_error) : 0;
+		if (native)
+			flags |= (ASTCONF_system|ASTCONF_error);
 		do
 		{
 			if (!(path = *++argv))
@@ -261,7 +265,12 @@ b_getconf(int argc, char** argv, Shbltin_t* context)
 			if (error_info.errors)
 				break;
 			if (!s)
-				goto defer;
+			{
+				if (native)
+					goto defer;
+				error(2, "%s: unknown name", name);
+				break;
+			}
 			if (!value)
 			{
 				if (flags & ASTCONF_write)

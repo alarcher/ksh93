@@ -80,23 +80,6 @@ static char	beenhere = 0;
     }
 #endif /* _lib_sigvec */
 
-#ifdef _lib_fts_notify
-#   include	<fts.h>
-    /* check for interrupts during tree walks */
-    static int fts_sigcheck(FTS* fp, FTSENT* ep, void* context)
-    {
-	Shell_t *shp = (Shell_t*)context;
-	NOT_USED(fp);
-	NOT_USED(ep);
-	if(shp->trapnote&SH_SIGSET)
-	{
-		errno = EINTR;
-		return(-1);
-	}
-	return(0);
-    }
-#endif /* _lib_fts_notify */
-
 #ifdef PATH_BFPATH
 #define PATHCOMP	NIL(Pathcomp_t*)
 #else
@@ -159,9 +142,6 @@ int sh_main(int ac, char *av[], Shinit_f userinit)
 	time(&mailtime);
 	if(rshflag=sh_isoption(SH_RESTRICTED))
 		sh_offoption(SH_RESTRICTED);
-#ifdef _lib_fts_notify
-	fts_notify(fts_sigcheck,(void*)shp);
-#endif /* _lib_fts_notify */
 	if(sigsetjmp(*((sigjmp_buf*)shp->jmpbuffer),0))
 	{
 		/* begin script execution here */
@@ -454,6 +434,7 @@ static void	exfile(register Shell_t *shp, register Sfio_t *iop,register int fno)
 			sh_offstate(SH_MONITOR);
 			goto done;
 		}
+		exitset();
 		/* skip over remaining input */
 		if(top = fcfile())
 		{
@@ -486,7 +467,6 @@ static void	exfile(register Shell_t *shp, register Sfio_t *iop,register int fno)
 		shp->nextprompt = 1;
 		sh_freeup(shp);
 		stakset(NIL(char*),0);
-		exitset();
 		sh_offstate(SH_STOPOK);
 		sh_offstate(SH_ERREXIT);
 		sh_offstate(SH_VERBOSE);
@@ -535,7 +515,6 @@ static void	exfile(register Shell_t *shp, register Sfio_t *iop,register int fno)
 #endif /* SHOPT_TIMEOUT */
 			shp->inlineno = 1;
 			error_info.line = 1;
-			shp->exitval = 0;
 			shp->trapnote = 0;
 			if(buff.mode == SH_JMPEXIT)
 			{
@@ -569,6 +548,7 @@ static void	exfile(register Shell_t *shp, register Sfio_t *iop,register int fno)
 			}
 			goto done;
 		}
+		shp->exitval = sh.savexit;
 		maxtry = IOMAXTRY;
 		if(sh_isstate(SH_INTERACTIVE) && shp->gd->hist_ptr)
 		{

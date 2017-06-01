@@ -133,24 +133,17 @@ static pid_t path_pfexecve(Shell_t *shp,const char *path, char *argv[],char *con
 
 static pid_t _spawnveg(Shell_t *shp,const char *path, char* const argv[], char* const envp[], pid_t pgid)
 {
-	int waitsafe = job.waitsafe;
 	pid_t pid;
-	job_lock();
 	while(1)
 	{
 		sh_stats(STAT_SPAWN);
 		pid = spawnveg(path,argv,envp,pgid);
 		if(pid>=0 || errno!=EAGAIN)
 			break;
-		_sh_fork(shp,pid, 0, (int*)0);
 	}
-	job.waitsafe = waitsafe;
-	if(pid>0)
-		job_fork(pid);
-	else
-		job_unlock();
 	return(pid);
 }
+
 /*
  * used with command -x to run the command in multiple passes
  * spawn is non-zero when invoked via spawn
@@ -293,25 +286,6 @@ skip:
 	return(cp);
 }
 
-static void free_bltin(Namval_t *np,void *data)
-{
-	register Pathcomp_t *pp= (Pathcomp_t*)data;
-	if(pp->flags&PATH_STD_DIR)
-	{
-		int offset=staktell();;
-		if(strcmp(pp->name,"/bin")==0 || memcmp(pp->name,np->nvname,pp->len) || np->nvname[pp->len]!='/')
-			return;
-		stakputs("/bin");
-		stakputs(np->nvname+pp->len+1);
-		stakputc(0);
-		sh_addbuiltin(stakptr(offset),(Shbltin_f)np->nvalue.bfp,NiL);
-		stakseek(offset);
-		return;
-	}
-	if((void*)np->nvenv==pp->bltin_lib)
-		nv_delete(np,sh_bltin_tree(),NV_NOFREE);
-}
-
 /*
  * delete current Pathcomp_t structure
  */
@@ -325,16 +299,8 @@ void  path_delete(Pathcomp_t *first)
 		{
 			if(pp->lib)
 				free((void*)pp->lib);
-			if(pp->blib)
-				free((void*)pp->blib);
-			if(pp->bltin_lib || (pp->flags&PATH_STD_DIR))
-			{
-				nv_scan(sh_bltin_tree(),free_bltin,pp,0,0);
-#if SHOPT_DYNAMIC
-				if(pp->bltin_lib)
-					dlclose(pp->bltin_lib);
-#endif /* SHOPT_DYNAMIC */
-			}
+			if(pp->bbuf)
+				free((void*)pp->bbuf);
 			free((void*)pp);
 			if(old)
 				old->next = ppnext;
@@ -453,7 +419,7 @@ Pathcomp_t *path_nextcomp(Shell_t *shp,register Pathcomp_t *pp, const char *name
 			if(!pp->dev && !pp->ino)
 				path_checkdup(shp,pp);
 			if(pp->flags&PATH_SKIP)
-				continue;
+				return(ppnext);
 			if(!last || *pp->name!='/')
 				break;
 		}
@@ -770,6 +736,7 @@ Pathcomp_t *path_absolute(Shell_t *shp,register const char *name, Pathcomp_t *pp
 	Pathcomp_t	*oldpp;
 	Namval_t	*np;
 	char		*cp;
+	char		*bp;
 	shp->path_err = ENOENT;
 	if(!pp && !(pp=path_get(shp,"")))
 		return(0);
@@ -777,81 +744,125 @@ Pathcomp_t *path_absolute(Shell_t *shp,register const char *name, Pathcomp_t *pp
 	while(1)
 	{
 		sh_sigcheck(shp);
-		isfun = (pp->flags&PATH_FPATH);
-		if(oldpp=pp)
+		shp->bltin_dir = 0;
+		while(oldpp=pp)
 		{
 			pp = path_nextcomp(shp,pp,name,0);
-			while(oldpp->flags&PATH_SKIP)
-			{
-				if(!(oldpp=oldpp->next))
-				{
-					shp->path_err = ENOENT;
-					return(0);
-				}
-			}
+			if(!(oldpp->flags&PATH_SKIP))
+				break;
 		}
-			
+		if(!oldpp)
+		{
+			shp->path_err = ENOENT;
+			return(0);
+		}
+		isfun = (oldpp->flags&PATH_FPATH);
 		if(!isfun && !sh_isoption(SH_RESTRICTED))
 		{
+#if SHOPT_DYNAMIC
+			Shbltin_f addr;
+			int n;
+#endif
 			if(*stakptr(PATH_OFFSET)=='/' && nv_search(stakptr(PATH_OFFSET),shp->bltin_tree,0))
 				return(oldpp);
 #if SHOPT_DYNAMIC
-			if(oldpp->blib)
+			n = staktell();
+			stakputs("b_");
+			stakputs(name);
+			stakputc(0);
+			if((addr = sh_getlib(shp, stakptr(n), oldpp)) &&
+			   (np = sh_addbuiltin(stakptr(PATH_OFFSET),addr,NiL)) &&
+			   nv_isattr(np,NV_BLTINOPT))
 			{
-				Shbltin_f addr;
-				int n = staktell();
-				char *cp;
+				shp->bltin_dir = 0;
+				return(oldpp);
+			}
+			stakseek(n);
+			while(bp = oldpp->blib)
+			{
+				char *fp;
+				void *dll;
+				int m;
+				if(fp = strchr(bp, ':'))
+				{
+					*fp++ = 0;
+					oldpp->blib = fp;
+					fp = 0;
+				}
+				else
+				{
+					fp = oldpp->bbuf;
+					oldpp->blib = oldpp->bbuf = 0;
+				}
+				n = staktell();
 				stakputs("b_");
 				stakputs(name);
 				stakputc(0);
-				if(!oldpp->bltin_lib)
+				m = staktell();
+				shp->bltin_dir = oldpp->name;
+				if(*bp!='/')
 				{
-					if(cp = strrchr(oldpp->blib,'/'))
-						cp++;
-					else
-						cp = oldpp->blib;
-					if(!strcmp(cp,LIBCMD) && (addr=(Shbltin_f)dlllook((void*)0,stakptr(n))))
-					{
-						if((np = sh_addbuiltin(stakptr(PATH_OFFSET),addr,NiL)) && nv_isattr(np,NV_BLTINOPT))
-							return(oldpp);
-					}
+					stakputs(oldpp->name);
+					stakputc('/');
+				}
+				stakputs(bp);
+				stakputc(0);
+				if(cp = strrchr(stakptr(m),'/'))
+					cp++;
+				else
+					cp = stakptr(m);
+				if(!strcmp(cp,LIBCMD) &&
+				   (addr=(Shbltin_f)dlllook((void*)0,stakptr(n))) &&
+				   (np = sh_addbuiltin(stakptr(PATH_OFFSET),addr,NiL)) &&
+				   nv_isattr(np,NV_BLTINOPT))
+				{
+				found:
+					if(fp)
+						free(fp);
+					shp->bltin_dir = 0;
+					return(oldpp);
+				}
 #ifdef SH_PLUGIN_VERSION
-					if (oldpp->bltin_lib = dllplugin(SH_ID, oldpp->blib, NiL, SH_PLUGIN_VERSION, NiL, RTLD_LAZY, NiL, 0))
-						sh_addlib(shp,oldpp->bltin_lib);
+				if (dll = dllplugin(SH_ID, stakptr(m), NiL, SH_PLUGIN_VERSION, NiL, RTLD_LAZY, NiL, 0))
+					sh_addlib(shp,dll,stakptr(m),oldpp);
 #else
 #if (_AST_VERSION>=20040404)
-					if (oldpp->bltin_lib = dllplug(SH_ID, oldpp->blib, NiL, RTLD_LAZY, NiL, 0))
+				if (dll = dllplug(SH_ID, stakptr(m), NiL, RTLD_LAZY, NiL, 0))
 #else
-					if (oldpp->bltin_lib = dllfind(oldpp->blib, NiL, RTLD_LAZY, NiL, 0))
+				if (dll = dllfind(stakptr(m), NiL, RTLD_LAZY, NiL, 0))
 #endif
-					{
-						/*
-						 * this detects the 2007-05-11 builtin context change and also
-						 * the 2008-03-30 opt_info.num change that hit libcmd::b_head
-						 */
+				{
+					/*
+					 * this detects the 2007-05-11 builtin context change and also
+					 * the 2008-03-30 opt_info.num change that hit libcmd::b_head
+					 */
 
-						if (libcmd && !dlllook(oldpp->bltin_lib, "b_pids"))
-						{
-							dlclose(oldpp->bltin_lib);
-							oldpp->bltin_lib = 0;
-							oldpp->blib = 0;
-						}
-						else
-							sh_addlib(shp,oldpp->bltin_lib);
+					if (libcmd && !dlllook(dll, "b_pids"))
+					{
+						dlclose(dll);
+						dll = 0;
 					}
-#endif
+					else
+						sh_addlib(shp,dll,stakptr(m),oldpp);
 				}
-				if(oldpp->bltin_lib &&
-				   (addr=(Shbltin_f)dlllook(oldpp->bltin_lib,stakptr(n))) &&
+#endif
+				if(dll &&
+				   (addr=(Shbltin_f)dlllook(dll,stakptr(n))) &&
 				   (!(np = sh_addbuiltin(stakptr(PATH_OFFSET),NiL,NiL)) || np->nvalue.bfp!=(Nambfp_f)addr) &&
 				   (np = sh_addbuiltin(stakptr(PATH_OFFSET),addr,NiL)))
 				{
-					np->nvenv = oldpp->bltin_lib;
-					return(oldpp);
+					np->nvenv = dll;
+					goto found;
 				}
+				if(*stakptr(PATH_OFFSET)=='/' && nv_search(stakptr(PATH_OFFSET),shp->bltin_tree,0))
+					goto found;
+				if(fp)
+					free(fp);
+				stakseek(n);
 			}
 #endif /* SHOPT_DYNAMIC */
 		}
+		shp->bltin_dir = 0;
 		sh_stats(STAT_PATHS);
 		f = canexecute(shp,stakptr(PATH_OFFSET),isfun);
 		if(isfun && f>=0 && (cp = strrchr(name,'.')))
@@ -1452,7 +1463,7 @@ static Pathcomp_t *path_addcomp(Shell_t *shp,Pathcomp_t *first, Pathcomp_t *old,
 		len = strlen(name);
 	for(pp=first; pp; pp=pp->next)
 	{
-		if(memcmp(name,pp->name,len)==0 && (pp->name[len]==':' || pp->name[len]==0))
+		if(len == pp->len && memcmp(name,pp->name,len)==0)
 		{
 			pp->flags |= flag;
 			return(first);
@@ -1474,7 +1485,7 @@ static Pathcomp_t *path_addcomp(Shell_t *shp,Pathcomp_t *first, Pathcomp_t *old,
 	{
 		pp->dev = 1;
 		pp->flags |= PATH_BUILTIN_LIB;
-		pp->blib = malloc(4);
+		pp->blib = pp->bbuf = malloc(sizeof(LIBCMD));
 		strcpy(pp->blib,LIBCMD);
 		return(first);
 	}
@@ -1522,7 +1533,7 @@ static int path_chkpaths(Shell_t *shp,Pathcomp_t *first, Pathcomp_t* old,Pathcom
 			}
 			*cp = 0;
 			m = ep ? (ep-sp) : 0;
-			if(m==0 || m==6 && memcmp((void*)sp,(void*)"FPATH=",6)==0)
+			if(m==0 || m==6 && memcmp((void*)sp,(void*)"FPATH=",m)==0)
 			{
 				if(first)
 				{
@@ -1532,33 +1543,11 @@ static int path_chkpaths(Shell_t *shp,Pathcomp_t *first, Pathcomp_t* old,Pathcom
 					path_addcomp(shp,first,old,stakptr(offset),PATH_FPATH|PATH_BFPATH);
 				}
 			}
-			else if(m==12 && memcmp((void*)sp,(void*)"BUILTIN_LIB=",12)==0)
+			else if(m==11 && memcmp((void*)sp,(void*)"PLUGIN_LIB=",m)==0)
 			{
-				if(!(pp->flags & PATH_BUILTIN_LIB) || strchr(ep,'-'))
-				{
-					if ((pp->flags & (PATH_BUILTIN_LIB|PATH_STD_DIR)) == PATH_BUILTIN_LIB)
-					{
-						free(pp->blib);
-						pp->blib = 0;
-					}
-					pp->flags |= PATH_BUILTIN_LIB;
-					if (*ep == '.' && !*(ep + 1))
-						pp->flags |= PATH_STD_DIR;
-					else
-					{
-						k = strlen(ep)+1;
-						if (*ep != '/')
-							k +=  pp->len+1;
-						pp->blib = sp = malloc(k);
-						if (*ep != '/')
-						{
-							strcpy(pp->blib,pp->name);
-							sp += pp->len;
-							*sp++ = '/';
-						}
-						strcpy(sp,ep);
-					}
-				}
+				if(pp->bbuf)
+					free(pp->bbuf);
+				pp->blib = pp->bbuf = strdup(ep);
 			}
 			else if(m)
 			{
@@ -1778,6 +1767,7 @@ static char *talias_get(Namval_t *np, Namfun_t *nvp)
 	char *ptr;
 	if(!pp)
 		return(NULL);
+	pp->shp->last_table = 0;
 	path_nextcomp(pp->shp,pp,nv_name(np),pp);
 	ptr = stakfreeze(0);
 	return(ptr+PATH_OFFSET);

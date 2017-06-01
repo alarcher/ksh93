@@ -420,13 +420,12 @@ loop_fmt :
 				base = v;
 			goto loop_flags;
 
+		/* 2012-06-27 I* will be deprecated and POSIX will probably settle on one of L* or z* */
+		case 'L' : /* long double or L* sizeof object length */
+		case 'z' : /* ssize_t or z* sizeof object length */
 		case 'I' : /* object length */
 			size = -1; flags = (flags & ~SFFMT_TYPES) | SFFMT_IFLAG;
-			if(isdigit(*form) )
-			{	for(size = 0, n = *form; isdigit(n); n = *++form)
-					size = size*10 + (n - '0');
-			}
-			else if(*form == '*')
+			if(*form == '*')
 			{	form = (*_Sffmtintf)(form+1,&n);
 				if(*form == '$')
 				{	form += 1;
@@ -450,6 +449,14 @@ loop_fmt :
 				}
 				else	size = va_arg(args,int);
 			}
+			else if (fmt == 'L')
+				flags = (flags & ~SFFMT_TYPES) | SFFMT_LDOUBLE;
+			else if (fmt == 'z')
+				flags = (flags&~SFFMT_TYPES) | SFFMT_ZFLAG;
+			else if(isdigit(*form) )
+			{	for(size = 0, n = *form; isdigit(n); n = *++form)
+					size = size*10 + (n - '0');
+			}
 			goto loop_flags;
 
 		case 'l' :
@@ -468,15 +475,8 @@ loop_fmt :
 			}
 			else	flags |= SFFMT_SHORT;
 			goto loop_flags;
-		case 'L' :
-			size = -1; flags = (flags & ~SFFMT_TYPES) | SFFMT_LDOUBLE;
-			goto loop_flags;
-
 		case 'j' :
 			size = -1; flags = (flags&~SFFMT_TYPES) | SFFMT_JFLAG;
-			goto loop_flags;
-		case 'z' :
-			size = -1; flags = (flags&~SFFMT_TYPES) | SFFMT_ZFLAG;
 			goto loop_flags;
 		case 't' :
 			size = -1; flags = (flags&~SFFMT_TYPES) | SFFMT_TFLAG;
@@ -803,8 +803,8 @@ loop_fmt :
 						}
 						v -= (sp - osp);
 					}
-#endif
 					else
+#endif
 					{	sp += -n;
 						v += n;
 					}

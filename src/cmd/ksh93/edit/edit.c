@@ -337,7 +337,7 @@ int tty_raw(register int fd, int echomode)
 	nttyparm.c_iflag |= (BRKINT|IGNPAR);
 #   endif	/* u370 */
 	if(echo)
-		nttyparm.c_lflag &= ~(ICANON|ISIG);
+		nttyparm.c_lflag &= ~(ICANON);
 	else
 		nttyparm.c_lflag &= ~(ICANON|ISIG|ECHO|ECHOK);
 	nttyparm.c_cc[VTIME] = 0;
@@ -811,7 +811,7 @@ int ed_read(void *context, int fd, char *buff, int size, int reedit)
 {
 	register Edit_t *ep = (Edit_t*)context;
 	register int rv= -1;
-	register int delim = (ep->e_raw==RAWMODE?'\r':'\n');
+	register int delim = ((ep->e_raw&RAWMODE)?nttyparm.c_cc[VEOL]:'\n');
 	Shell_t *shp = ep->sh;
 	int mode = -1;
 	int (*waitevent)(int,long,int) = shp->gd->waitevent;
@@ -1659,12 +1659,23 @@ int ed_histgen(Edit_t *ep,const char *pattern)
 	Histmatch_t	*mp,*mplast=0;
 	History_t	*hp;
 	off_t		offset;
-	int 		ac=0,l,m,n,index1,index2;
-	char		*cp, **argv, **av, **ar;
-	if(!(hp=ep->sh->gd->hist_ptr))
+	int 		ac=0,l,n,index1,index2;
+	size_t		m;
+	char		*cp, **argv=0, **av, **ar;
+	static		int maxmatch;
+	if(!(hp=ep->sh->gd->hist_ptr) && (!nv_getval(HISTFILE) || !sh_histinit(ep->sh)))
 		return(0);
-	if(*pattern=='#')
-		pattern++;
+	if(ep->e_cur <=2)
+		maxmatch = 0;
+	else if(maxmatch && ep->e_cur > maxmatch)
+	{
+		ep->hlist = 0;
+		ep->hfirst = 0;
+		return(0);
+	}
+	hp = ep->sh->gd->hist_ptr;
+	if(*pattern=='#' && *++pattern=='#')
+		return(0);
 	cp = stakalloc(m=strlen(pattern)+6);
 	sfsprintf(cp,m,"@(%s)*%c",pattern,0);
 	if(ep->hlist)
@@ -1679,11 +1690,18 @@ int ed_histgen(Edit_t *ep,const char *pattern)
 					*av++ = (char*)mp;
 			}
 			*av = 0;
+			ep->hmax = av-argv;
+			if(ep->hmax==0)
+				maxmatch = ep->e_cur;
 			return(ep->hmax=av-argv);
 		}
 		stakset(ep->e_stkptr,ep->e_stkoff);
 	}
-	pattern = ep->hpat = cp;
+	if((m=strlen(cp)) >= sizeof(ep->hpat))
+		m = sizeof(ep->hpat)-1;
+	memcpy(ep->hpat,cp,m);
+	ep->hpat[m] = 0;
+	pattern = cp;
 	index1 = (int)hp->histind;
 	for(index2=index1-hp->histsize; index1>index2; index1--)
 	{
@@ -1804,3 +1822,49 @@ void	*ed_open(Shell_t *shp)
 	strcpy(ed->e_macro,"_??");
 	return((void*)ed);
 }
+
+#undef ioctl
+int	sh_ioctl(int fd, int cmd, void* val, int sz)
+{
+	int r,err=errno;
+	if(sz == sizeof(void*))
+	{
+		while((r=ioctl(fd,cmd,val)) < 0 && errno==EINTR)
+			errno = err;
+	}
+	else
+	{
+		Sflong_t l = (Sflong_t)val;
+		if(sizeof(val)==sizeof(long))
+		{
+			while((r=ioctl(fd,cmd,(unsigned long)l)) < 0 && errno==EINTR)
+				errno = err;
+		}
+		else if(sizeof(int)!=sizeof(long))
+		{
+			while((r=ioctl(fd,cmd,(unsigned int)l)) < 0 && errno==EINTR)
+				errno = err;
+		}
+	}
+	return(r);
+}
+
+#ifdef _lib_tcgetattr
+#   undef tcgetattr
+    sh_tcgetattr(int fd, struct termios *tty)
+    {
+	int r,err = errno;
+	while((r=tcgetattr(fd,tty)) < 0 && errno==EINTR)
+		errno = err;
+	return(r);
+    }
+
+#   undef tcsetattr
+    sh_tcsetattr(int fd, int cmd, struct termios *tty)
+    {
+	int r,err = errno;
+	while((r=tcsetattr(fd,cmd,tty)) < 0 && errno==EINTR)
+		errno = err;
+	return(r);
+    }
+#endif

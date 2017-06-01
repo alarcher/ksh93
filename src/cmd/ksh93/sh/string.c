@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -295,7 +295,7 @@ void sh_utol(register char const *str1,register char *str2)
  */
 static char	*sh_fmtcsv(const char *string)
 {
-	register const char *cp = string, *op;
+	register const char *cp = string;
 	register int c;
 	int offset;
 	if(!cp)
@@ -360,7 +360,7 @@ char	*sh_fmtq(const char *string)
 	for(;c;c= mbchar(cp))
 	{
 #if SHOPT_MULTIBYTE
-		if(c=='\'' || !iswprint(c))
+		if(c=='\'' || c>=128 || c<0 || !iswprint(c)) 
 #else
 		if(c=='\'' || !isprint(c))
 #endif /* SHOPT_MULTIBYTE */
@@ -379,6 +379,7 @@ char	*sh_fmtq(const char *string)
 	}
 	else
 	{
+		int isbyte=0;
 		stakwrite("$'",2);
 		cp = string;
 #if SHOPT_MULTIBYTE
@@ -415,19 +416,26 @@ char	*sh_fmtq(const char *string)
 				break;
 			    default:
 #if SHOPT_MULTIBYTE
-				if(!iswprint(c))
+				isbyte = 0;
+				if(c<0)
 				{
-					while(op<cp)
-						sfprintf(staksp,"\\%.3o",*(unsigned char*)op++);
+					c = *((unsigned char *)op);
+					cp = op+1;
+					isbyte = 1;
+				}
+				if(mbwide() && ((cp-op)>1))
+				{
+					sfprintf(staksp,"\\u[%x]",c);
 					continue;
 				}
+				else if(!iswprint(c) || isbyte)
 #else
 				if(!isprint(c))
+#endif
 				{
-					sfprintf(staksp,"\\%.3o",c);
+					sfprintf(staksp,"\\x%.2x",c);
 					continue;
 				}
-#endif
 				state=0;
 				break;
 			}

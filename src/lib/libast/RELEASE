@@ -1,3 +1,42 @@
+12-07-25 pathprobe.c: fix read() loop to handle EINTR
+12-06-28 vmalloc/malloc.c: use sbrk() unless VMALLOC_OPTIONS=mmap or asoinit(0,0,0)!=0 (workaround until next malloc update)
+12-06-28 aso/aso.c: asoinit(0,0,0): 0: no specific init, 1: app initialized
+12-06-27 sfio/sfvprintf.c: allow { L* z* } aliases for I* -- posix will probably pick one
+12-06-26 regex/regnexec.c: fix uninitialized variable reference
+12-06-26 comp/setlocale.c: utf8_wctomb() now calls (the corrrect) wc2utf8()
+12-06-25 string/chresc.c: accept \u[U+<hex>] and \u{U+<hex>}
+12-06-24 regex/regcomp.c: mb [^...] must be marked "complicated"
+12-06-20 port/astconf.c: increase DEBUG_astconf error debug levels (may leach into rt output)
+12-06-18 sfio/_sfopen.c: add 'e' => O_CLOEXEC
+12-06-18 features/fcntl.c: add #define O_CLOEXEC 0 if not defined
+12-06-13 features/float: handle __mips c99 peculiarities
+12-06-13 features/standards: handle __MACH__ posix peculiarities
+12-06-08 sfio/sfclose.c,sfmode.c: sfclose() for sfopopen() stream returns sh-compatible $?
+12-06-08 comp/strtold.c: fix header botch that missed ldexpl() prototype -- ouch
+12-06-06 misc/proclib.h: partially undo <ast_standards.h> for leaked ancient bsd-isms
+12-05-31 misc/proclib.h: <ast_standards.h> for linux undefined struct mmsghdr*
+12-05-31 error.h: add ERROR_PIPE(errno) to handle EPIPE and ECONNRESET
+12-05-31 Makefile: don't install $(INCLUDEDIR)/prototyped.h: src/cmd/INIT does it
+12-05-31 regcomp.c: add (?V...) ~(V...) REG_REGEXP switch
+12-05-28 regex: regoff_t in => ssize_t via api 20120528
+12-05-21 features/asometh: split intrinsic and method tests so code only instantiated in aso.c
+12-05-21 comp/strdup.c: use oldof() since mem overwritten by string copy
+12-05-18 misc/stk.c: fix access of moved realloc() data
+12-05-15 misc/optget.c: #? option with no value should have opt_info.num==0
+12-05-11 misc/stk.c: fix memmove() read of 1 uninitialized byte
+12-05-11 regex/regcoll.c: avoid memcpy() to self
+12-05-01 port/astconf.c: fix astconflist() to list standard minmax value if defined
+12-04-26 sfio/sftmp.c: fix memory leak due to inadvertent SF_STATIC copy
+12-04-26 sfio/sfwrite.c: fix subtle memory leak (with Vmlast or Vmpool or freeBSD malloc)
+12-04-26 vmalloc/vmbest.c: SIGSEGV overcommit check for __linux__ only
+12-04-25 vmalloc: add _vmfd() for private close-on-exec fds
+12-04-23 sfio_t.h: change getr to 32 bits to prepare for UTF-8 delimiters
+12-04-23 features/signal.c: add SIGSTKFLT
+12-04-17 regex/regcomp.c: fix (E:...) vs (E)... scoping
+12-04-11 features/sys: add aix's _LARGE_FILE_API to the _LARGEFILE(64)?_SOURCE mix -- anyone else?
+12-04-11 include/cmdarg.h,misc/cmdarg.c: (finally!) add a discipline with Cmdrun_f
+12-03-28 vmalloc: int vs [s]size_t cleanup
+12-03-27 sfio: fix #if logic that caused syntax errors (on 64 bit uwin)
 12-03-10 misc/optget.c: HELP_index for "PLUGIN" too
 12-02-29 include/shcmd.h: PLUGIN_VERSION 20111111 for cdt disc/meth change
 12-02-29 comp/spawnveg.c: fix sigcritical() to include waitpid() for internal child
@@ -19,7 +58,7 @@
 12-01-12 sfpkrd.c: add __sun I_PEEK+rsh runtime workaround
 12-01-10 shcmd.h: void* => Shbltin_t*
 12-01-10 tmxdate.c: handle { n>=1000 } TM_PARTS
-11-12-21 plug up some meory links -- thanks mhlavink
+11-12-21 plug up some memory links -- thanks mhlavink
 11-12-21 vmprivate.c: enclose VM_NONMEM exception in CLRLOCK(vm,0) ... SETLOCK(vm,0)
 11-12-13 aso: in -lposix for uwin, not -last -- just like vmalloc
 11-12-13 sfpoll.c: all streams SF_IOINTR => don't ignore EINTR

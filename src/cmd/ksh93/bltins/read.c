@@ -55,6 +55,7 @@ struct read_save
         short	fd;
         short	plen;
 	int	flags;
+	ssize_t	len;
         long	timeout;
 };
 
@@ -64,6 +65,7 @@ int	b_read(int argc,char *argv[], Shbltin_t *context)
 	register char *name;
 	register int r, flags=0, fd=0;
 	register Shell_t *shp = context->shp;
+	ssize_t	len=0;
 	long timeout = 1000*shp->st.tmout;
 	int save_prompt, fixargs=context->invariant;
 	struct read_save *rp;
@@ -112,10 +114,7 @@ int	b_read(int argc,char *argv[], Shbltin_t *context)
 	    case 'n': case 'N':
 		flags &= ((1<<D_FLAG)-1);
 		flags |= (r=='n'?N_FLAG:NN_FLAG);
-		r = (int)opt_info.num;
-		if((unsigned)r > (1<<((8*sizeof(int))-D_FLAG))-1)
-			errormsg(SH_DICT,ERROR_exit(1),e_overlimit,opt_info.name);
-		flags |= (r<< D_FLAG);
+		len = opt_info.num;
 		break;
 	    case 'r':
 		flags |= R_FLAG;
@@ -163,6 +162,7 @@ int	b_read(int argc,char *argv[], Shbltin_t *context)
 		rp->argv = argv;
 		rp->prompt = name;
 		rp->plen = r;
+		rp->len = len;
 	}
 bypass:
 	shp->prompt = default_prompt;
@@ -174,7 +174,7 @@ bypass:
 	shp->timeout = 0;
 	save_prompt = shp->nextprompt;
 	shp->nextprompt = 0;
-	r=sh_readline(shp,argv,fd,flags,timeout);
+	r=sh_readline(shp,argv,fd,flags,len,timeout);
 	shp->nextprompt = save_prompt;
 	if(r==0 && (r=(sfeof(shp->sftable[fd])||sferror(shp->sftable[fd]))))
 	{
@@ -201,7 +201,7 @@ static void timedout(void *handle)
  *  <timeout> is number of milli-seconds until timeout
  */
 
-int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeout)
+int sh_readline(register Shell_t *shp,char **names, volatile int fd, int flags,ssize_t size,long timeout)
 {
 	register ssize_t	c;
 	register unsigned char	*cp;
@@ -216,12 +216,12 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 	char			use_stak = 0;
 	volatile char		was_write = 0;
 	volatile char		was_share = 1;
-	int			rel, wrd, keytrap;
+	volatile int		keytrap;
+	int			rel, wrd;
 	long			array_index = 0;
 	void			*timeslot=0;
 	int			delim = '\n';
 	int			jmpval=0;
-	ssize_t			size = 0;
 	int			binary;
 	int			oflags=NV_ASSIGN|NV_VARNAME;
 	char			inquote = 0;
@@ -244,9 +244,14 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 			((struct edit*)shp->gd->ed_context)->e_default = np;
 		if(flags&A_FLAG)
 		{
+			Namarr_t *ap;
 			flags &= ~A_FLAG;
 			array_index = 1;
+			if((ap=nv_arrayptr(np)) && !ap->fun)
+				ap->nelem++;
 			nv_unset(np);
+			if((ap=nv_arrayptr(np)) && !ap->fun)
+				ap->nelem--;
 			nv_putsub(np,NIL(char*),0L);
 		}
 		else if(flags&C_FLAG)
@@ -272,14 +277,17 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 			np = REPLYNOD;
 	}
 	keytrap =  ep?ep->e_keytrap:0;
-	if(flags>>D_FLAG)	/* delimiter not new-line or fixed size read */
+	if(size || (flags>>D_FLAG))	/* delimiter not new-line or fixed size read */
 	{
-		if(flags&(N_FLAG|NN_FLAG))
-			size = ((unsigned)flags)>>D_FLAG;
-		else
-			delim = ((unsigned)flags)>>D_FLAG;
 		if((shp->fdstatus[fd]&IOTTY) && !keytrap)
 			tty_raw(fd,1);
+		if(!(flags&(N_FLAG|NN_FLAG)))
+		{
+			delim = ((unsigned)flags)>>D_FLAG;
+			ep->e_nttyparm.c_cc[VEOL] = delim;
+			ep->e_nttyparm.c_lflag |= ISIG;
+			tty_set(fd,TCSADRAIN,&ep->e_nttyparm);
+		}
 	}
 	binary = nv_isattr(np,NV_BINARY);
 	if(!binary && !(flags&(N_FLAG|NN_FLAG)))
@@ -559,18 +567,24 @@ int sh_readline(register Shell_t *shp,char **names, int fd, int flags,long timeo
 		    case S_QUOTE:
 			c = shp->ifstable[*cp++];
 			inquote = !inquote;
-			goto skip;
+			if(val)
+			{
+				stakputs(val);
+				use_stak = 1;
+				*val = 0;
+			}
+			continue;
 		    case S_ESC:
 			/* process escape character */
 			if((c = shp->ifstable[*cp++]) == S_NL)
 				was_escape = 1;
 			else
 				c = 0;
-		skip:
 			if(val)
 			{
 				stakputs(val);
 				use_stak = 1;
+				was_escape = 1;
 				*val = 0;
 			}
 			continue;

@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1985-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -147,7 +147,7 @@ tvtouch(const char* path, register const Tv_t* av, register const Tv_t* mv, cons
 			return -1;
 		umask(mode = umask(0));
 		mode = (~mode) & (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);
-		if ((fd = open(path, O_WRONLY|O_CREAT|O_TRUNC, mode)) < 0)
+		if ((fd = open(path, O_WRONLY|O_CREAT|O_TRUNC|O_cloexec, mode)) < 0)
 			return -1;
 		close(fd);
 		errno = oerrno;
@@ -251,7 +251,7 @@ tvtouch(const char* path, register const Tv_t* av, register const Tv_t* mv, cons
 			errno = EINVAL;
 			return -1;
 		}
-		if ((fd = open(path, O_RDWR)) >= 0)
+		if ((fd = open(path, O_RDWR|O_cloexec)) >= 0)
 		{
 			char	c;
 
@@ -271,14 +271,14 @@ tvtouch(const char* path, register const Tv_t* av, register const Tv_t* mv, cons
 		return -1;
 	umask(mode = umask(0));
 	mode = (~mode) & (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);
-	if ((fd = open(path, O_WRONLY|O_CREAT|O_TRUNC, mode)) < 0)
+	if ((fd = open(path, O_WRONLY|O_CREAT|O_TRUNC|O_cloexec, mode)) < 0)
 		return -1;
 	close(fd);
 	errno = oerrno;
 	if (av == (const Tv_t*)&now && mv == (const Tv_t*)&now)
 		return 0;
 #if _lib_utimets
-	return utimets(path, am);
+	return utimets(path, ts);
 #else
 #if _lib_utimes
 	return utimes(path, am);

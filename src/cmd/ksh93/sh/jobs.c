@@ -463,7 +463,7 @@ int job_reap(register int sig)
 			pw->p_flag |= (P_NOTIFY|P_SIGNALLED|P_STOPPED);
 			pw->p_exit = WSTOPSIG(wstat);
 			if(pw->p_pgrp && pw->p_pgrp==job.curpgid && sh_isstate(SH_STOPOK))
-				sh_fault(pw->p_exit); 
+				kill(getpid(),pw->p_exit); 
 			if(px)
 			{
 				/* move to top of job list */
@@ -501,7 +501,7 @@ int job_reap(register int sig)
 				{
 					pw->p_flag &= ~P_NOTIFY;
 					sh_offstate(SH_STOPOK);
-					sh_fault(SIGINT); 
+					kill(getpid(),SIGINT); 
 					sh_onstate(SH_STOPOK);
 				}
 			}
@@ -658,9 +658,10 @@ void job_init(Shell_t *shp, int lflag)
 	if(possible = (setpgid(0,job.mypgid)>=0) || errno==EPERM)
 	{
 		/* wait until we are in the foreground */
+
 		while((job.mytgid=tcgetpgrp(JOBTTY)) != job.mypgid)
 		{
-			if(job.mytgid == -1)
+			if(job.mytgid <= 0)
 				return;
 			/* Stop this shell until continued */
 			signal(SIGTTIN,SIG_DFL);
@@ -833,7 +834,9 @@ static void job_set(register struct process *pw)
 	if((pw->p_flag&P_STOPPED) || tcgetpgrp(job.fd) == shp->gd->pid)
 		tcsetpgrp(job.fd,pw->p_fgrp);
 	/* if job is stopped, resume it in the background */
-	job_unstop(pw);
+	if(!shp->forked)
+		job_unstop(pw);
+	shp->forked = 0;
 #endif	/* SIGTSTP */
 }
 
@@ -1638,12 +1641,12 @@ int	job_wait(register pid_t pid)
 		job_reset(pw);
 		/* propogate keyboard interrupts to parent */
 		if((pw->p_flag&P_SIGNALLED) && pw->p_exit==SIGINT && !(shp->sigflag[SIGINT]&SH_SIGOFF))
-			sh_fault(SIGINT); 
+			kill(getpid(),SIGINT); 
 #ifdef SIGTSTP
 		else if((pw->p_flag&P_STOPPED) && pw->p_exit==SIGTSTP)
 		{
 			job.parent = 0;
-			sh_fault(SIGTSTP); 
+			kill(getpid(),SIGTSTP); 
 		}
 #endif /* SIGTSTP */
 	}
@@ -1992,7 +1995,7 @@ void *job_subsave(void)
 
 void job_subrestore(void* ptr)
 {
-	register struct jobsave *jp, *jpnext;
+	register struct jobsave *jp;
 	register struct back_save *bp = (struct back_save*)ptr;
 	register struct process *pw, *px, *pwnext;
 	struct jobsave *end=NULL;
@@ -2047,6 +2050,7 @@ void job_fork(pid_t parent)
 		job.in_critical = 0;
 		break;
 	default:
+		job_chksave(parent);
 		jobfork=0;
 		job_unlock();
 		break;

@@ -62,6 +62,14 @@
 #   define O_SERVICE	O_NOCTTY
 #endif
 
+#ifndef ERROR_PIPE
+#ifdef ECONNRESET
+#define ERROR_PIPE(e)	((e)==EPIPE||(e)==ECONNRESET)
+#else
+#define ERROR_PIPE(e)	((e)==EPIPE)
+#endif
+#endif
+
 #define RW_ALL	(S_IRUSR|S_IRGRP|S_IROTH|S_IWUSR|S_IWGRP|S_IWOTH)
 
 static void	*timeout;
@@ -683,9 +691,11 @@ int sh_close(register int fd)
 		sh_iovalidfd(shp,fd);
 	if(!(sp=shp->sftable[fd]) || sfclose(sp) < 0)
 	{
+		int err=errno;
 		if(fdnotify)
 			(*fdnotify)(fd,SH_FDCLOSE);
-		r=close(fd);
+		while((r=close(fd)) < 0 && errno==EINTR)
+			errno = err;
 	}
 	if(fd>2)
 		shp->sftable[fd] = 0;
@@ -890,6 +900,30 @@ int	sh_pipe(register int pv[])
 	return(0);
 }
 
+#ifndef pipe
+   int	sh_rpipe(register int pv[])
+   {
+   	return sh_pipe(pv);
+   }
+#else
+#  undef pipe
+   /* create a real pipe when pipe() is socketpair */
+   int	sh_rpipe(register int pv[])
+   {
+	Shell_t *shp = sh_getinterp();
+	int fd[2];
+	if(pipe(fd)<0 || (pv[0]=fd[0])<0 || (pv[1]=fd[1])<0)
+		errormsg(SH_DICT,ERROR_system(1),e_pipe);
+	pv[0] = sh_iomovefd(pv[0]);
+	pv[1] = sh_iomovefd(pv[1]);
+	shp->fdstatus[pv[0]] = IONOSEEK|IOREAD;
+	shp->fdstatus[pv[1]] = IONOSEEK|IOWRITE;
+	sh_subsavefd(pv[0]);
+	sh_subsavefd(pv[1]);
+	return(0);
+   }
+#endif
+
 #if SHOPT_COSHELL
     int sh_coaccept(Shell_t *shp,int *pv,int out)
     {
@@ -1038,13 +1072,15 @@ void sh_pclose(register int pv[])
 static char *io_usename(char *name, int *perm, int fno, int mode)
 {
 	struct stat	statb;
-	char		*tname, *sp, *ep;
-	int		fd;
+	char		*tname, *sp, *ep, path[PATH_MAX+1];
+	int		fd,r;
 	if(mode==0)
 	{
-		if((fd = sh_open(name,O_RDONLY,0)) > 0)
+		if((fd = sh_open(name,O_RDONLY,0)) >= 0)
 		{
-			if(fstat(fd,&statb) < 0)
+			r = fstat(fd,&statb);
+			close(fd);
+			if(r)
 				return(0);
 			if(!S_ISREG(statb.st_mode))
 				return(0);
@@ -1052,6 +1088,11 @@ static char *io_usename(char *name, int *perm, int fno, int mode)
 		}
 		else if(fd < 0  && errno!=ENOENT)
 			return(0);
+	}
+	while((fd=readlink(name, path, PATH_MAX)) >0)
+	{
+		name=path;
+		name[fd] = 0;
 	}
 	stakseek(1);
 	stakputs(name);
@@ -1073,8 +1114,6 @@ static char *io_usename(char *name, int *perm, int fno, int mode)
 	tname = stakfreeze(1);
 	switch(mode)
 	{
-		unlink(tname);
-		break;
 	    case 1:
 		rename(tname,name);
 		break;
@@ -1473,6 +1512,8 @@ int	sh_redirect(Shell_t *shp,struct ionod *iop, int flag)
 							goto fail;
 						if(fn>=shp->gd->lim.open_max && !sh_iovalidfd(shp,fn))
 							goto fail;
+						if(flag!=2 || shp->subshell)
+							sh_iosave(shp,fn,indx|0x10000,tname?fname:(trunc?Empty:0));
 						shp->fdstatus[fn] = shp->fdstatus[fd];
 						sh_close(fd);
 						fd = fn;
@@ -1608,8 +1649,8 @@ static ssize_t tee_write(Sfio_t *iop,const void *buff,size_t n,Sfdisc_t *unused)
 void sh_iosave(Shell_t *shp, register int origfd, int oldtop, char *name)
 {
 	register int	savefd;
-	int flag = (oldtop&IOSUBSHELL);
-	oldtop &= ~IOSUBSHELL;
+	int flag = (oldtop&(IOSUBSHELL|IOPICKFD));
+	oldtop &= ~(IOSUBSHELL|IOPICKFD);
 	/* see if already saved, only save once */
 	for(savefd=shp->topfd; --savefd>=oldtop; )
 	{
@@ -1643,6 +1684,9 @@ void sh_iosave(Shell_t *shp, register int origfd, int oldtop, char *name)
 	}
 	else
 #endif /* SHOPT_DEVFD */
+	if(flag&IOPICKFD)
+		savefd = -1;
+	else
 	{
 		if((savefd = sh_fcntl(origfd, F_DUPFD, 10)) < 0 && errno!=EBADF)
 		{
@@ -1652,7 +1696,7 @@ void sh_iosave(Shell_t *shp, register int origfd, int oldtop, char *name)
 		}
 	}
 	filemap[shp->topfd].tname = name;
-	filemap[shp->topfd].subshell = flag;
+	filemap[shp->topfd].subshell = (flag&IOSUBSHELL);
 	filemap[shp->topfd].orig_fd = origfd;
 	filemap[shp->topfd++].save_fd = savefd;
 	if(savefd >=0)
@@ -1801,7 +1845,7 @@ static int slowexcept(register Sfio_t *iop,int type,void *data,Sfdisc_t *handle)
 	NOT_USED(handle);
 	if(type==SF_DPOP || type==SF_FINAL)
 		free((void*)handle);
-	if(type==SF_WRITE && errno==EPIPE)
+	if(type==SF_WRITE && ERROR_PIPE(errno))
 	{
 		sfpurge(iop);
 		return(-1);
@@ -2142,7 +2186,7 @@ static int pipeexcept(Sfio_t* iop, int mode, void *data, Sfdisc_t* handle)
 {
 	if(mode==SF_DPOP || mode==SF_FINAL)
 		free((void*)handle);
-	else if(mode==SF_WRITE && errno==EPIPE)
+	else if(mode==SF_WRITE && ERROR_PIPE(errno))
 	{
 		sfpurge(iop);
 		return(-1);
@@ -2187,7 +2231,7 @@ static void	sftrack(Sfio_t* sp, int flag, void* data)
 	if(sh_isstate(SH_NOTRACK))
 		return;
 	mode = sfset(sp,0,0);
-	if(sp==shp->heredocs && fd < 10 && flag==SF_NEW)
+	if(sp==shp->heredocs && fd < 10 && flag==SF_SETFD)
 	{
 		fd = sfsetfd(sp,10);
 		fcntl(fd,F_SETFD,FD_CLOEXEC);
@@ -2364,6 +2408,7 @@ static int subexcept(Sfio_t* sp,register int mode, void *data, Sfdisc_t* handle)
 	if(mode==SF_CLOSING)
 	{
 		sfdisc(sp,SF_POPDISC);
+		sfsetfd(sp,-1);
 		return(0);
 	}
 	else if(disp && (mode==SF_DPOP || mode==SF_FINAL))
@@ -2645,3 +2690,22 @@ int sh_isdevfd(register const char *fd)
 	}
 	return(1);
 }
+
+#undef fchdir
+int sh_fchdir(int fd)
+{
+	int r,err=errno;
+	while((r=fchdir(fd))<0 && errno==EINTR)
+		errno = err;
+	return(r);
+}
+
+#undef chdir
+int sh_chdir(const char* dir)
+{
+	int r,err=errno;
+	while((r=chdir(dir))<0 && errno==EINTR)
+		errno = err;
+	return(r);
+}
+

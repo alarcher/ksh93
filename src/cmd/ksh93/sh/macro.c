@@ -35,6 +35,7 @@
 #include	<fcin.h>
 #include	<pwd.h>
 #include	<ctype.h>
+#include	<regex.h>
 #include	"name.h"
 #include	"variables.h"
 #include	"shlex.h"
@@ -643,8 +644,13 @@ static void copyto(register Mac_t *mp,int endch, int newquote)
 		    case S_ENDCH:
 			if((mp->lit || cp[-1]!=endch || mp->quote!=newquote))
 				goto pattern;
-			if(endch==RBRACE && *cp==LPAREN && mp->pattern && brace)
-				goto pattern;
+			if(endch==RBRACE && mp->pattern && brace)
+			{
+				brace--;
+				if(*cp==LPAREN && mp->pattern!=2)
+					goto pattern;
+				continue;
+			}
 		    case S_EOF:
 			if(c)
 			{
@@ -769,7 +775,7 @@ e_badsubscript,*cp);
 			if(!(mp->quote || mp->lit))
 			{
 				mp->patfound = mp->split && sh_isoption(SH_BRACEEXPAND);
-				brace = 1;
+				brace++;
 			}
 		    pattern:
 			if(!mp->pattern || !(mp->quote || mp->lit))
@@ -1430,7 +1436,7 @@ retry1:
 					v = nv_getval(np);
 				mp->atmode = (v && mp->quoted && mode=='@');
 				/* special case --- ignore leading zeros */  
-				if( (mp->arith||mp->let) && (np->nvfun || nv_isattr(np,(NV_LJUST|NV_RJUST|NV_ZFILL))) && !nv_isattr(np,NV_INTEGER) && (offset==0 || !isalnum(c)))
+				if((mp->let || (mp->arith&&nv_isattr(np,(NV_LJUST|NV_RJUST|NV_ZFILL)))) && !nv_isattr(np,NV_INTEGER) && (offset==0 || isspace(c) || strchr(",.+-*/=%&|^?!<>",c)))
 					mp->zeros = 1;
 			}
 			if(savptr==stakptr(0))
@@ -1461,7 +1467,11 @@ retry1:
 			if(isastchar(mode) && array_elem(ap)> !c)
 				dolg = -1;
 			else
+			{
+				ap->nelem &= ~ARRAY_SCAN;
 				dolg = 0;
+		
+			}
 		}
 		break;
 	    case S_EOF:
@@ -1598,7 +1608,8 @@ retry1:
 				mp->assign = assign;
 				/* add null byte */
 				sfputc(stkp,0);
-				stkseek(stkp,stktell(stkp)-1);
+				if(c!='=')
+					stkseek(stkp,stktell(stkp)-1);
 			}
 			else
 			{
@@ -1688,7 +1699,10 @@ retry1:
 		if(*ptr==':')
 		{
 			if((type = (int)sh_strnum(ptr+1,&ptr,1)) <=0)
+			{
 				v = 0;
+				mp->atmode = 0;
+			}
 			else if(isastchar(mode))
 			{
 				if(dolg>=0)
@@ -1775,7 +1789,8 @@ retry2:
 	if(v && (!nulflg || *v ) && c!='+')
 	{
 		register int d = (mode=='@'?' ':mp->ifs);
-		int match[2*(MATCH_MAX+1)], nmatch, nmatch_prev, vsize_last;
+		regoff_t match[2*(MATCH_MAX+1)];
+		int nmatch, nmatch_prev, vsize_last;
 		char *vlast;
 		while(1)
 		{
@@ -2011,13 +2026,11 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 	struct _mac_		savemac;
 	int			savtop = stktell(stkp);
 	char			lastc=0, *savptr = stkfreeze(stkp,0);
-#if SHOPT_MULTIBYTE
-	wchar_t			lastw=0;
-#endif /* SHOPT_MULTIBYTE */
 	int			was_history = sh_isstate(SH_HISTORY);
 	int			was_verbose = sh_isstate(SH_VERBOSE);
 	int			was_interactive = sh_isstate(SH_INTERACTIVE);
 	int			newlines,bufsize,nextnewlines;
+	Sfoff_t			foff;
 	Namval_t		*np;
 	mp->shp->argaddr = 0;
 	savemac = *mp;
@@ -2114,7 +2127,8 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 					num = lseek(fd, (off_t)0, SEEK_CUR);
 				goto out_offset;
 			}
-			sp = sfnew(NIL(Sfio_t*),(char*)malloc(IOBSIZE+1),IOBSIZE,fd,SF_READ|SF_MALLOC);
+			if(!(sp=mp->shp->sftable[fd]))
+				sp = sfnew(NIL(Sfio_t*),(char*)malloc(IOBSIZE+1),IOBSIZE,fd,SF_READ|SF_MALLOC);
 			type = 3;
 		}
 		else
@@ -2143,6 +2157,13 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 	/* read command substitution output and put on stack or here-doc */
 	sfpool(sp, NIL(Sfio_t*), SF_WRITE);
 	sh_offstate(SH_INTERACTIVE);
+	if((foff = sfseek(sp,(Sfoff_t)0,SEEK_END)) > 0)
+	{
+		size_t soff = stktell(stkp); 
+		sfseek(sp,(Sfoff_t)0,SEEK_SET);
+		stkseek(stkp,soff+foff+64);
+		stkseek(stkp,soff);
+	}
 	while((str=(char*)sfreserve(sp,SF_UNBOUND,0)) && (c=bufsize=sfvalue(sp))>0)
 	{
 #if SHOPT_CRNL
@@ -2188,17 +2209,6 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 		}
 		else if(lastc)
 		{
-#if SHOPT_MULTIBYTE
-			if(lastw)
-			{
-				int	n;
-				char	mb[8];
-				n = mbconv(mb, lastw);
-				mac_copy(mp,mb,n);
-				lastw = 0;
-			}
-			else
-#endif /* SHOPT_MULTIBYTE */
 			mac_copy(mp,&lastc,1);
 			lastc = 0;
 		}
@@ -2210,17 +2220,6 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 			ssize_t len = 1;
 
 			/* can't write past buffer so save last character */
-#if SHOPT_MULTIBYTE
-			if ((len = mbsize(str))>1)
-			{
-				len = mb2wc(lastw,str,len);
-				if (len < 0)
-				{
-					lastw = 0;
-					len = 1;
-				}
-			}
-#endif /* SHOPT_MULTIBYTE */
 			c -= len;
 			lastc = str[c];
 			str[c] = 0;
@@ -2241,17 +2240,6 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 	}
 	if(lastc)
 	{
-#if SHOPT_MULTIBYTE
-		if(lastw)
-		{
-			int	n;
-			char	mb[8];
-			n = mbconv(mb, lastw);
-			mac_copy(mp,mb,n);
-			lastw = 0;
-		}
-		else
-#endif /* SHOPT_MULTIBYTE */
 		mac_copy(mp,&lastc,1);
 		lastc = 0;
 	}
@@ -2274,7 +2262,11 @@ static void mac_copy(register Mac_t *mp,register const char *str, register int s
 	{
 		/* prevent leading 0's from becomming octal constants */
 		while(size>1 && *str=='0')
+		{
+			if(str[1]=='x' || str[1]=='X')
+				break;
 			str++,size--;
+		}
 		mp->zeros = 0;
 		cp = str;
 	}

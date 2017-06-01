@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1997-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1997-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -42,7 +42,7 @@ dllversion(void* dll, const char* path)
 	{
 		state.error = 1;
 		sfsprintf(state.errorbuf, sizeof(state.errorbuf), "plugin_version() not found");
-		errorf("dll", NiL, 1, "%s: %s", path, state.errorbuf);
+		errorf("dll", NiL, 1, "dllversion: %s: %s", path, state.errorbuf);
 	}
 	return 0;
 }
@@ -58,7 +58,6 @@ extern int
 dllcheck(void* dll, const char* path, unsigned long ver, unsigned long* cur)
 {
 	unsigned long		v;
-	Dll_plugin_version_f	pvf;
 
 	state.error = 0;
 	if (ver || cur)
@@ -77,9 +76,10 @@ dllcheck(void* dll, const char* path, unsigned long ver, unsigned long* cur)
 		{
 			state.error = 1;
 			sfsprintf(state.errorbuf, sizeof(state.errorbuf), "plugin version %lu older than caller %lu", v, ver);
-			errorf("dll", NiL, 1, "%s: %s", path, state.errorbuf);
+			errorf("dll", NiL, 1, "dllcheck: %s: %s", path, state.errorbuf);
 		}
 		return 0;
 	}
+	errorf("dll", NiL, -1, "dllversion: %s: %lu >= %lu", path, v, ver);
 	return 1;
 }

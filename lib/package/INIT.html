@@ -55,6 +55,22 @@ All recorded changes follow.
 <P><HR><CENTER><FONT color=red><FONT face=courier><H3><A name="INIT changes">INIT changes</A></H3></FONT></FONT></CENTER>
 <PRE>
 
+12-07-17 iffe.sh: add C code NOTE("...") to ammend --verbose output
+12-06-26 iffe.sh: fix "npt foo" to handle function-like macro foo()
+12-06-20 package.sh: use $KSH for rt in "results test"
+12-06-15 Makefile: add PLUGIN_LIB to $INSTALLROOT/bin/.paths and BUILTIN_LIB =&gt; PLUGIN_LIB
+12-06-15 package.sh: add PLUGIN_LIB to $INSTALLROOT/bin/.paths and BUILTIN_LIB =&gt; PLUGIN_LIB
+12-06-13 package.sh: handle admin.db column output
+12-06-08 iffe.sh: fix 12-06-06 typo
+12-06-06 iffe.sh: check for -l* in reverse and accumulative order (e.g., for -last &amp; -lm)
+12-06-04 package.sh: always check $INSTALLROOT/lib/package/profile
+12-05-31 Makefile: ID=ast; $(INSTALLROOT)/prototyped.h =&gt; $(INSTALLROOT)/$(ID)/prototyped.h
+12-05-28 iffe.sh: api foo YYYYMMDD =&gt; FOOAPI(rel) test macro
+12-05-24 package.sh: change admin.db comment =&gt; owner attributes
+12-04-25 ratz.c: add sear -k option to keep installation tmp dir on exit
+12-04-17 package.sh: skip sh version logic for ``use''
+12-04-17 cc.ibm.risc*: _LARGEFILE64_SOURCE =&gt; _LARGE_FILE_API moved to libast/features
+12-04-09 cc.ibm.risc*: speak aixese for _LARGEFILE64_SOURCE
 12-02-29 cc.darwin.i386*: handle default cc vs kernel bittedness
 12-02-29 C+probe: add __TIMESTAMP__ to the nopredefined list
 12-02-29 package.sh: don't assume grep -q or /usr/local/lib in LD_LIBRARY_PATH
@@ -107,7 +123,7 @@ All recorded changes follow.
 10-08-11 mktest.sh: add "DO command ..."
 10-07-27 rt.sh: handle "rt X=Y ..."
 10-06-29 ratz.c: non-option sear args passed to sear_exec()
-10-06-25 iffe.sh: "api" op chanegd to not do "map-libc" type mappings
+10-06-25 iffe.sh: "api" op changed to not do "map-libc" type mappings
 10-06-25 package.sh: "force admin ditto" =&gt; no ditto --update option
 10-06-22 C+probe: handle cc that require .&#0091;ci&#0093; input for version info
 10-06-21 ditto.sh: change default remote access to ssh (about time)
@@ -980,7 +996,7 @@ All recorded changes follow.
 <TR>
 <TD align=left></TD>
 <TD align=center></TD>
-<TD align=right>March 13, 2012</TD>
+<TD align=right>August 07, 2012</TD>
 </TR>
 </TABLE>
 <P>

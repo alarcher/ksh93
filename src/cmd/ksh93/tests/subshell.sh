@@ -31,6 +31,7 @@ integer Errors=0 Error_fd=2
 tmp=$(mktemp -dt) || { err_exit mktemp -dt failed; exit 1; }
 trap "cd /; rm -rf $tmp" EXIT
 
+builtin getconf
 bincat=$(PATH=$(getconf PATH) whence -p cat)
 
 z=()
@@ -534,7 +535,7 @@ $SHELL <<- \EOF
 	(( ${#out} == 96011 )) || err_exit "\${#out} is ${#out} should be 96011"
 EOF
 } & pid=$!
-$SHELL -c "{ sleep 2 && kill $pid ;}" 2> /dev/null
+$SHELL -c "{ sleep 4 && kill $pid ;}" 2> /dev/null
 (( $? == 0 )) &&  err_exit 'process has hung'
 
 {
@@ -578,5 +579,42 @@ then    integer i
                 fi
         done
 fi
+
+trap USR1 USR1
+trap ERR ERR
+[[ $(trap -p USR1) == USR1 ]] || err_exit 'trap -p USR1 in subshell not working'
+[[ $(trap -p ERR) == ERR ]] || err_exit 'trap -p ERR in subshell not working'
+[[ $(trap -p) == *USR* ]] || err_exit 'trap -p in subshell does not contain USR'
+[[ $(trap -p) == *ERR* ]] || err_exit 'trap -p in subshell does not contain ERR'
+trap - USR1 ERR
+
+( PATH=/bin:/usr/bin
+dot=$(cat <<-EOF
+		$(ls -d .)
+	EOF
+) ) & sleep 1
+if      kill -0 $! 2> /dev/null
+then    err_exit  'command substitution containg here-doc with command substitution fails'
+fi
+
+printf=$(whence -p printf)
+[[ $( { trap "echo foobar" EXIT; ( $printf ""); } & wait) == foobar ]] || err_exit  'exit trap not being invoked'
+
+$SHELL 2> /dev/null -c '( PATH=/bin; set -o restricted) ; exit 0'  || err_exit 'restoring PATH when a subshell enables restricted exits not working'
+
+$SHELL <<- \EOF
+	wc=$(whence wc) head=$(whence head)
+	print > /dev/null  $( ( $head -c 1 /dev/zero | ( $wc -c) 3>&1 ) 3>&1) &
+	pid=$!
+	sleep 2
+	kill -9 $! 2> /dev/null && err_exit '/dev/zero in command substitution hangs'
+	wait $!
+EOF
+
+for f in /dev/stdout /dev/fd/1
+do	if	[[ -e $f ]]
+	then	$SHELL -c "x=\$(command -p tee $f </dev/null 2>/dev/null)" || err_exit "$f in command substitution fails"
+	fi
+done
 
 exit $((Errors<125?Errors:125))

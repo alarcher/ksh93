@@ -316,4 +316,30 @@ x=$(LC_ALL=debug $SHELL -c 'typeset -R10 x="a<2b|>c";print -r -- "${x}"')
 x=$(LC_ALL=debug $SHELL -c 'typeset -L10 x="a<2b|>c";print -r -- "${x}"')
 [[ $x == 'a<2b|>c   ' ]] || err_exit 'typeset -L10 should end in three spaces'
 
+if      $SHELL -c "export LC_ALL=en_US.UTF-8; c=$'\342\202\254'; [[ \${#c} == 1 ]]" 2>/dev/null
+then	LC_ALL=en_US.UTF-8
+	unset i p1 p2 x
+	for i in 9 b c d 20 1680 2000 2001 2002 2003 2004 2005 2006 2008 2009 200a 2028 2029 3000 # 1803 2007 202f  205f
+	do	if	! eval "[[ \$'\\u[$i]' == [[:space:]] ]]"
+		then	x+=,$i
+		fi
+	done
+	if	[[ $x ]]
+	then	if	[[ $x == ,*,* ]]
+		then	p1=s p2="are not space characters"
+		else	p1=  p2="is not a space character"
+		fi
+		err_exit "unicode char$p1 ${x#?} $p2 in locale $LC_ALL"
+	fi
+	unset x
+	x=$(printf "hello\u[20ac]\xee world")
+	[[ $(print -r -- "$x") == $'hello\u[20ac]\xee world' ]] || err_exit '%q with unicode and non-unicode not working'
+	if	[[ $(whence od) ]]
+	then	got='68 65 6c 6c 6f e2 82 ac ee 20 77 6f 72 6c 64 0a'
+		[[ $(print -r -- "$x" | od -An -tx1) == "$got" ]] || err_exit "incorrect string from printf %q"
+	fi
+	
+fi
+
 exit $((Errors<125?Errors:125))
+

@@ -125,6 +125,7 @@ typedef struct _pfobj_s	Pfobj_t;
 #define VM_check	0x0004	/* enable detailed checks		*/
 #define VM_free		0x0008	/* disable addfreelist()		*/
 #define VM_keep		0x0010	/* disable free()			*/
+#define VM_mmap		0x0020	/* try mmap() block allocator first	*/
 
 #if _UWIN
 #include <ast_windows.h>
@@ -472,6 +473,7 @@ typedef struct _vmextern_s
 #define VMOPTIONS()     do { if (!_Vmoptions) { _vmoptions(); } } while (0)
 
 extern int		_vmbestcheck _ARG_((Vmdata_t*, Block_t*));
+extern int		_vmfd _ARG_((int));
 extern int		_vmlock _ARG_((Vmalloc_t*, int));
 extern void		_vmoptions _ARG_((void));
 

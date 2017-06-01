@@ -317,6 +317,8 @@ int ed_emacsread(void *context, int fd,char *buff,int scend, int reedit)
 			count = 1;
 		adjust = -1;
 		i = cur;
+		if(c!='\t' && c!=ESC && !isdigit(c))
+			ep->ed->e_tabcount = 0;
 		switch(c)
 		{
 		case LNEXTCHAR:
@@ -728,7 +730,7 @@ process:
 #if SHOPT_MULTIBYTE
 	ed_external(out,buff);
 #endif /* SHOPT_MULTIBYTE */
-	i = strlen(buff);
+	i = (int)strlen(buff);
 	if (i)
 		return(i);
 	return(-1);
@@ -1002,7 +1004,7 @@ static int escape(register Emacs_t* ep,register genchar *out,int count)
 				}
 				beep();
 			}
-			else if(i=='=')
+			else if(i=='=' || (i=='\\' && out[cur-1]=='/'))
 			{
 				draw(ep,REFRESH);
 				if(count>0)

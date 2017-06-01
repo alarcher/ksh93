@@ -1,7 +1,7 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2011 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -43,16 +43,11 @@
 #include	"terminal.h"
 #include	"FEATURE/time"
 
-#if SHOPT_OLDTERMIO
-#   undef ECHOCTL
-#   define echoctl	(vp->ed->e_echoctl)
+#ifdef ECHOCTL
+#   define echoctl	ECHOCTL
 #else
-#   ifdef ECHOCTL
-#	define echoctl	ECHOCTL
-#   else
-#	define echoctl	0
-#   endif /* ECHOCTL */
-#endif /*SHOPT_OLDTERMIO */
+#   define echoctl	0
+#endif /* ECHOCTL */
 
 #ifndef FIORDCHK
 #   define NTICKS	5		/* number of ticks for typeahead */
@@ -737,6 +732,8 @@ static int cntlmode(Vi_t *vp)
 		/*** make sure cursor is at the last char ***/
 		sync_cursor(vp);
 	}
+	else if(last_virt > INVALID )
+		cur_virt++;
 
 	/*** Read control char until something happens to cause a ***/
 	/* return to APPEND/REPLACE mode	*/
@@ -828,6 +825,7 @@ static int cntlmode(Vi_t *vp)
 			refresh(vp,CONTROL);
 			ed_getchar(vp->ed,-1);
 			restore_v(vp);
+			ed_ungetchar(vp->ed,'a');
 			break;
 		}
 
@@ -1398,6 +1396,8 @@ static void getline(register Vi_t* vp,register int mode)
 			refresh(vp,INPUT);
 			continue;
 		}
+		if(c!='\t')
+			vp->ed->e_tabcount = 0;
 
 		switch( c )
 		{
@@ -1537,7 +1537,7 @@ static void getline(register Vi_t* vp,register int mode)
 			if( mode != SEARCH )
 				save_last(vp);
 			refresh(vp,INPUT);
-			last_phys++;
+			physical[++last_phys] = 0;
 			return;
 
 		case '\t':		/** command completion **/
@@ -2197,7 +2197,7 @@ static void save_v(register Vi_t *vp)
  */
 static int curline_search(Vi_t *vp, const char *string)
 {
-	register int len=strlen(string);
+	register size_t len=strlen(string);
 	register const char *dp,*cp=string, *dpmax;
 #if SHOPT_MULTIBYTE
 	ed_external(vp->u_space,(char*)vp->u_space);
@@ -2433,7 +2433,7 @@ addin:
 			last_virt = i;
 			ed_ringbell();
 		}
-		else if(c == '=' && !vp->repeat_set)
+		else if((c=='=' || (c=='\\'&&virtual[i]=='/')) && !vp->repeat_set)
 		{
 			last_virt = i;
 			vp->nonewline++;

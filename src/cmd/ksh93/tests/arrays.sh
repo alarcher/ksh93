@@ -1,7 +1,7 @@
 ########################################################################
 #                                                                      #
 #               This software is part of the ast package               #
-#          Copyright (c) 1982-2011 AT&T Intellectual Property          #
+#          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #                      and is licensed under the                       #
 #                 Eclipse Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -584,5 +584,87 @@ foo=([xx]=aa [yy]=bb [zz]=cc)
 foo=( ${foo[yy]} ${foo[zz]} )
 [[ ${foo[@]} == 'bb cc' ]] || err_exit "associative array assignment using parts of array for values gives wrong result of ${foo[@]}"
 
+unset foo
+typeset -a foo=(abc=1 def=2)
+[[ ${foo[1]} == def=2 ]] || err_exit "index array with elements containing = not working"
+
+unset foo
+typeset -a foo=( a b )
+typeset -p foo[10]
+[[ ${!foo[@]} == '0 1' ]] || err_exit 'typeset -p foo[10] has side effect'
+
+unset foo
+exp='typeset -a foo=((11 22) (66) )'
+x=$(
+	typeset -a foo=( ( 11 22 ) ( 44 55 ) )
+	foo[1]=(66)
+	typeset -p foo
+) 2> /dev/null
+[[ $x == "$exp" ]] || err_exit 'setting element 1 to index fooay failed'
+unset foo
+exp='typeset -a foo=((11 22) (x=3))'
+x=$(
+	typeset -a foo=( ( 11 22 ) ( 44 55 ) )
+	foo[1]=(x=3)
+	typeset -p foo
+) 2> /dev/null
+[[ $x == "$exp" ]] || err_exit 'setting element 1 of array to compound variable failed'
+
+#test for cloning a very large index array - can core dump
+(	
+    trap 'x=$?;exit $(( $x!=0 ))' EXIT
+    $SHELL <<- \EOF
+	(
+		print '('
+		integer i
+		for ((i=0 ; i < 16384 ; i++ )) ; do
+                	printf '\tinteger var%i=%i\n' i i
+        	done
+        	printf 'typeset -a ar=(\n'
+		for ((i=0 ; i < 16384 ; i++ )) ; do
+			printf '\t[%d]=%d\n' i i
+		done
+		print ')'
+		print ')'
+	) | read -C hugecpv
+	compound hugecpv2=hugecpv
+	v=$(typeset -p hugecpv)
+	[[ ${v/hugecpv/hugecpv2} == "$(typeset -p hugecpv2)" ]]
+EOF
+) 2> /dev/null || err_exit 'copying a large array fails'
+
+unset foo
+typeset -a foo
+foo+=(bar)
+[[ ${foo[0]} == bar ]] || 'appending to empty array not working'
+
+unset isnull
+typeset -A isnull
+isnull[mdapp]=Y
+: ${isnull[@]}
+isnull[mdapp]=N
+[[ ${isnull[*]} != *N* ]] && err_exit 'bug after ${arr[@]} with one element associative array'
+
+unset arr2
+arr2=()
+typeset -A arr2
+unset arr2
+[[ $(typeset -p arr2) ]] && err_exit 'unset associative array of compound variables not working'
+
+arr3=(x=3)
+typeset -A arr3
+[[  $(typeset -p arr3) == 'typeset -A arr3=()' ]] || err_exit 'typeset -A does not first unset compound variable.'
+
+arr4=(x=3)
+typeset -a arr4
+[[  $(typeset -p arr4) == 'typeset -a arr4' ]] || err_exit 'typeset -a does not first unset compound variable.'
+
+alias foo=bar
+arr5=(foo bar)
+[[ $(typeset -p arr5) == 'typeset -a arr5=(foo bar)' ]] || err_exit 'typeset expanding non-declaration aliases'
+
+typeset -A Foo
+Foo=( [a]=AA;[b]=BB)
+[[ ${Foo[a]} == AA ]] || err_exit 'Fooa[a] is {Foo[a]} not AA' 
 
 exit $((Errors<125?Errors:125))
